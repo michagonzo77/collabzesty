@@ -1,7 +1,7 @@
 tools:
   - name: update_sso_permission_set
     alias: update-permission-set
-    description: A Python script to create a customer managed policy, attach it to an SSO permission set, update the permission set, and provision the permission set
+    description: Update an SSO permission set with a new customer managed policy and provision the permission set, requires approval from an admin
     type: python
     content: |
       import os
@@ -146,6 +146,7 @@ tools:
         required: true
     env:
       - KUBIYA_USER_EMAIL
+      - AWS_PROFILE
       - SSO_INSTANCE_ARN
     with_volumes:
       - name: sqlite_data
@@ -247,6 +248,7 @@ tools:
     env:
       - KUBIYA_USER_EMAIL
       - SSO_INSTANCE_ARN
+      - AWS_PROFILE
     with_files:
       - source: /root/.aws/credentials
         destination: /root/.aws/credentials
