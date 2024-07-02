@@ -134,6 +134,10 @@ tools:
       except json.JSONDecodeError as e:
           print(f"Error parsing policy JSON: {e}")
 
+    dependencies: |
+        boto3
+        requests
+        
     args:
       permission_set_name:
         description: The name of the permission set to update
@@ -249,6 +253,9 @@ tools:
       - KUBIYA_USER_EMAIL
       - SSO_INSTANCE_ARN
       - AWS_PROFILE
+    dependencies: |
+        boto3
+        requests
     with_files:
       - source: /root/.aws/credentials
         destination: /root/.aws/credentials

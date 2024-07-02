@@ -143,6 +143,9 @@ tools:
       policy_description:
         description: "A NATURAL LANGUAGE description of the policy to generate - this will be used to generate the policy JSON - should be a precise description of the permissions required, eg: 'Allow the user to read from the S3 bucket named 'my-bucket' and write to the DynamoDB table named 'my-table'.'"
         required: true
+    dependencies: |
+      litellm
+      requests
     env:
       - KUBIYA_USER_EMAIL
       - SLACK_CHANNEL_ID
@@ -311,45 +314,123 @@ tools:
       - APPROVING_USERS
       - SLACK_API_TOKEN
       - KUBIYA_API_KEY
+    dependencies: |
+      requests
     with_volumes:
       - name: sqlite_data
         path: /sqlite_data
 
-  - name: view_requests
-    alias: view_requests
-    description: A tool to view current access requests from SQLite database
-    type: python
-    content: |
-      import os
-      import sqlite3
-      import json
+- name: view_requests
+  alias: view_requests
+  description: A tool to view current access requests from SQLite database and send a detailed Slack Block Kit message
+  type: python
+  content: |
+    import os
+    import sqlite3
+    import json
+    import requests
+    import sys
 
-      conn = sqlite3.connect('/data/approval_requests.db')
-      c = conn.cursor()
+    SLACK_API_TOKEN = os.getenv('SLACK_API_TOKEN')
+    SLACK_CHANNEL_ID = os.getenv('SLACK_CHANNEL_ID')
+    SLACK_THREAD_TS = os.getenv('SLACK_THREAD_TS')
+    APPROVING_USERS = os.getenv('APPROVING_USERS', '').split(',')
+    USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
 
-      c.execute("SELECT * FROM approvals WHERE approved='pending'")
-      requests = c.fetchall()
-      conn.close()
+    if not SLACK_API_TOKEN or not SLACK_CHANNEL_ID or not SLACK_THREAD_TS or not USER_EMAIL:
+        print("Missing required environment variables")
+        sys.exit(1)
 
-      requests_list = []
-      for request in requests:
-          request_data = {
-              "user_email": request[0],
-              "purpose": request[1],
-              "ttl_minutes": request[2],
-              "policy_name": request[3],
-              "permission_set_name": request[4],
-              "policy_json": request[5],
-              "requested_at": request[6],
-              "expires_at": request[7],
-              "slack_channel_id": request[8],
-              "slack_thread_ts": request[9],
-              "approved": request[10]
-          }
-          requests_list.append(request_data)
+    if USER_EMAIL not in APPROVING_USERS:
+        print(f"Permission denied! User {USER_EMAIL} is not authorized to view access requests.")
+        sys.exit(1)
 
-      print(json.dumps(requests_list, indent=2))
+    conn = sqlite3.connect('/data/approval_requests.db')
+    c = conn.cursor()
 
-    with_volumes:
-      - name: sqlite_data
-        path: /sqlite_data
+    c.execute("SELECT * FROM approvals WHERE approved='pending'")
+    requests = c.fetchall()
+    conn.close()
+
+    requests_list = []
+    for request in requests:
+        request_data = {
+            "user_email": request[0],
+            "purpose": request[1],
+            "ttl_minutes": request[2],
+            "policy_name": request[3],
+            "permission_set_name": request[4],
+            "policy_json": request[5],
+            "requested_at": request[6],
+            "expires_at": request[7],
+            "slack_channel_id": request[8],
+            "slack_thread_ts": request[9],
+            "approved": request[10]
+        }
+        requests_list.append(request_data)
+
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": ":sparkles: *Pending Access Requests* :sparkles:"
+            }
+        },
+        {
+            "type": "divider"
+        }
+    ]
+
+    for req in requests_list:
+        block = {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":bust_in_silhouette: *User:* `{req['user_email']}`\n"
+                    f":memo: *Purpose:* `{req['purpose']}`\n"
+                    f":hourglass_flowing_sand: *TTL:* `{req['ttl_minutes']} minutes`\n"
+                    f":lock: *Policy Name:* `{req['policy_name']}`\n"
+                    f":key: *Permission Set:* `{req['permission_set_name']}`\n"
+                    f":calendar: *Requested At:* `{req['requested_at']}`\n"
+                    f":alarm_clock: *Expires At:* `{req['expires_at']}`\n"
+                    f":question: *Status:* `{req['approved']}`"
+                )
+            }
+        }
+        blocks.append(block)
+        blocks.append({"type": "divider"})
+
+    payload = {
+        "channel": SLACK_CHANNEL_ID,
+        "thread_ts": SLACK_THREAD_TS,
+        "blocks": blocks
+    }
+
+    response = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {SLACK_API_TOKEN}'
+        },
+        json=payload
+    )
+
+    if response.status_code < 300:
+        print(f"Slack notification sent successfully. Response: {response.text}")
+    else:
+        print(f"Error sending Slack notification: {response.status_code} - {response.text}")
+
+  env:
+    - SLACK_API_TOKEN
+    - SLACK_CHANNEL_ID
+    - SLACK_THREAD_TS
+    - APPROVING_USERS
+    - KUBIYA_USER_EMAIL
+  with_volumes:
+    - name: sqlite_data
+      path: /sqlite_data
+  dependencies:
+    - name: requests
+      version: "*"
