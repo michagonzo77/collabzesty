@@ -102,7 +102,7 @@ tools:
           "https://api.kubiya.ai/api/v1/event",
           headers={
               'Content-Type': 'application/json',
-              'Authorization': f'Bearer {KUBIYA_API_KEY}'
+              'Authorization': f'UserKey {KUBIYA_API_KEY}'
           },
           json=payload
       )
