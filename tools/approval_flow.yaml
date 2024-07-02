@@ -79,8 +79,17 @@ tools:
       conn.commit()
       conn.close()
 
+      entry = {
+          "user_email": USER_EMAIL,
+          "purpose": purpose,
+          "ttl_minutes": ttl,
+          "policy_name": policy_name,
+          "permission_set_name": permission_set_name,
+          "policy_json": policy_json
+      }
+
       # Create and send webhook
-      prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privilaged policy {user_email} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request"
+      prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privilaged policy {USER_EMAIL} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request - here's the full request information:\n\n{entry}"
       
       payload = {
           "agent_id": os.getenv('KUBIYA_AGENT_UUID'),
