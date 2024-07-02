@@ -47,7 +47,7 @@ EOT
     TOOL_SERVER_URL        = "http://localhost:3001" 
     SSO_INSTANCE_ARN        = "arn:aws:sso:::instance/ssoins-7223725edfa9d76b"
     SCHEDULE_TASK        = "1"
-    APPROVING_USERS      = "michael.gonzalez@kubiya.ai"
+    APPROVING_USERS      = "michael.gonzalez@kubiya.ai,shaked@kubiya.ai"
 
   }
 }
