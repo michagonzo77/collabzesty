@@ -1,0 +1,252 @@
+tools:
+  - name: update_sso_permission_set
+    alias: update-permission-set
+    description: A Python script to create a customer managed policy, attach it to an SSO permission set, update the permission set, and provision the permission set
+    type: python
+    content: |
+      import os
+      import sqlite3
+      import sys
+      import boto3
+      from botocore.exceptions import ClientError
+      import json
+
+      def check_approval_status(user_email, policy_name):
+          conn = sqlite3.connect('/data/approval_requests.db')
+          c = conn.cursor()
+          c.execute("SELECT * FROM approvals WHERE user_email=? AND policy_name=? AND approved='approved'", (user_email, policy_name))
+          approval = c.fetchone()
+          conn.close()
+          return approval is not None
+
+      USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
+
+      if not USER_EMAIL:
+          print("Missing KUBIYA_USER_EMAIL environment variable")
+          sys.exit(1)
+
+      permission_set_name = "{{.permission_set_name}}"
+      policy_name = "{{.policy_name}}"
+      policy_json = "{{.policy_json}}"
+
+      if not check_approval_status(USER_EMAIL, policy_name):
+          print(f"User {USER_EMAIL} does not have approval to perform the requested operation.")
+          sys.exit(1)
+
+      # Load AWS credentials from default location
+      aws_creds_path = '/root/.aws/credentials'
+      if not os.path.exists(aws_creds_path):
+          print(f"Error: AWS credentials file not found at {aws_creds_path}")
+          sys.exit(1)
+
+      with open(aws_creds_path, 'r') as f:
+          aws_creds = f.read()
+
+      # Parse the AWS credentials
+      aws_creds_dict = {}
+      for line in aws_creds.splitlines():
+          if '=' in line:
+              key, value = line.split('=', 1)
+              aws_creds_dict[key.strip()] = value.strip()
+
+      aws_access_key_id = aws_creds_dict.get('aws_access_key_id')
+      aws_secret_access_key = aws_creds_dict.get('aws_secret_access_key')
+      aws_session_token = aws_creds_dict.get('aws_session_token')
+      region_name = aws_creds_dict.get('region')
+
+      if not all([aws_access_key_id, aws_secret_access_key, region_name]):
+          print("Error: Missing required AWS credentials.")
+          sys.exit(1)
+
+      # Initialize boto3 session
+      session = boto3.Session(
+          aws_access_key_id=aws_access_key_id,
+          aws_secret_access_key=aws_secret_access_key,
+          aws_session_token=aws_session_token,
+          region_name=region_name
+      )
+
+      # Initialize boto3 clients
+      iam_client = session.client('iam')
+      sso_admin_client = session.client('sso-admin')
+
+      try:
+          instance_arn = os.getenv('SSO_INSTANCE_ARN')
+          if not instance_arn:
+              print("Error: Environment variable SSO_INSTANCE_ARN not set.")
+              sys.exit(1)
+
+          # List all permission sets and find the ARN for the given name
+          response = sso_admin_client.list_permission_sets(
+              InstanceArn=instance_arn
+          )
+
+          permission_set_arn = None
+          for permission_set in response['PermissionSets']:
+              permission_set_details = sso_admin_client.describe_permission_set(
+                  InstanceArn=instance_arn,
+                  PermissionSetArn=permission_set
+              )
+              if permission_set_details['PermissionSet']['Name'] == permission_set_name:
+                  permission_set_arn = permission_set
+                  break
+
+          if not permission_set_arn:
+              print(f"Error: Permission set with name '{permission_set_name}' not found.")
+              sys.exit(1)
+
+          # Create the customer managed policy
+          policy_document = json.loads(policy_json)
+          response = iam_client.create_policy(
+              PolicyName=policy_name,
+              PolicyDocument=json.dumps(policy_document)
+          )
+          policy_arn = response['Policy']['Arn']
+          print(f"Created policy: {policy_arn}")
+
+          # Attach the customer managed policy to the permission set
+          sso_admin_client.attach_customer_managed_policy_reference_to_permission_set(
+              InstanceArn=instance_arn,
+              PermissionSetArn=permission_set_arn,
+              CustomerManagedPolicyReference={
+                  'Name': policy_name,
+                  'Path': '/'
+              }
+          )
+          print("Policy attached to permission set successfully.")
+
+          # Update the permission set
+          sso_admin_client.update_permission_set(
+              InstanceArn=instance_arn,
+              PermissionSetArn=permission_set_arn
+          )
+          print("Permission set updated successfully.")
+
+          # Provision the permission set
+          sso_admin_client.provision_permission_set(
+              InstanceArn=instance_arn,
+              PermissionSetArn=permission_set_arn,
+              TargetType='ALL_PROVISIONED_ACCOUNTS'
+          )
+          print("Permission set provisioned successfully.")
+      except ClientError as e:
+          print(f"Error: {e}")
+      except json.JSONDecodeError as e:
+          print(f"Error parsing policy JSON: {e}")
+
+    args:
+      permission_set_name:
+        description: The name of the permission set to update
+        required: true
+      policy_name:
+        description: The name of the customer managed policy to create
+        required: true
+      policy_json:
+        description: The JSON policy to apply to the customer managed policy - best to pass this as an environment variable eg. `$POLICY_JSON` after setting the variable in the environment
+        required: true
+    env:
+      - KUBIYA_USER_EMAIL
+      - SSO_INSTANCE_ARN
+    with_volumes:
+      - name: sqlite_data
+        path: /sqlite_data
+    with_files:
+      - source: /root/.aws/credentials
+        destination: /root/.aws/credentials
+
+  - name: delete_permission_set
+    alias: delete-permission-set
+    description: A Python script to delete an SSO permission set
+    type: python
+    content: |
+      import os
+      import boto3
+      from botocore.exceptions import ClientError
+
+      USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
+
+      if not USER_EMAIL:
+          print("Missing KUBIYA_USER_EMAIL environment variable")
+          sys.exit(1)
+
+      permission_set_name = "{{.permission_set_name}}"
+
+      # Load AWS credentials from default location
+      aws_creds_path = '/root/.aws/credentials'
+      if not os.path.exists(aws_creds_path):
+          print(f"Error: AWS credentials file not found at {aws_creds_path}")
+          sys.exit(1)
+
+      with open(aws_creds_path, 'r') as f:
+          aws_creds = f.read()
+
+      # Parse the AWS credentials
+      aws_creds_dict = {}
+      for line in aws_creds.splitlines():
+          if '=' in line:
+              key, value = line.split('=', 1)
+              aws_creds_dict[key.strip()] = value.strip()
+
+      aws_access_key_id = aws_creds_dict.get('aws_access_key_id')
+      aws_secret_access_key = aws_creds_dict.get('aws_secret_access_key')
+      aws_session_token = aws_creds_dict.get('aws_session_token')
+      region_name = aws_creds_dict.get('region')
+
+      if not all([aws_access_key_id, aws_secret_access_key, region_name]):
+          print("Error: Missing required AWS credentials.")
+          sys.exit(1)
+
+      # Initialize boto3 session
+      session = boto3.Session(
+          aws_access_key_id=aws_access_key_id,
+          aws_secret_access_key=aws_secret_access_key,
+          aws_session_token=aws_session_token,
+          region_name=region_name
+      )
+
+      sso_admin_client = session.client('sso-admin')
+
+      try:
+          instance_arn = os.getenv('SSO_INSTANCE_ARN')
+          if not instance_arn:
+              print("Error: Environment variable SSO_INSTANCE_ARN not set.")
+              sys.exit(1)
+
+          # List all permission sets and find the ARN for the given name
+          response = sso_admin_client.list_permission_sets(
+              InstanceArn=instance_arn
+          )
+
+          permission_set_arn = None
+          for permission_set in response['PermissionSets']:
+              permission_set_details = sso_admin_client.describe_permission_set(
+                  InstanceArn=instance_arn,
+                  PermissionSetArn=permission_set
+              )
+              if permission_set_details['PermissionSet']['Name'] == permission_set_name:
+                  permission_set_arn = permission_set
+                  break
+
+          if not permission_set_arn:
+              print(f"Error: Permission set with name '{permission_set_name}' not found.")
+              sys.exit(1)
+
+          # Delete the permission set
+          sso_admin_client.delete_permission_set(
+              InstanceArn=instance_arn,
+              PermissionSetArn=permission_set_arn
+          )
+          print(f"Permission set '{permission_set_name}' deleted successfully.")
+      except ClientError as e:
+          print(f"Error: {e}")
+
+    args:
+      permission_set_name:
+        description: The name of the permission set to delete
+        required: true
+    env:
+      - KUBIYA_USER_EMAIL
+      - SSO_INSTANCE_ARN
+    with_files:
+      - source: /root/.aws/credentials
+        destination: /root/.aws/credentials
