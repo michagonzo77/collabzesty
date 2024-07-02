@@ -1,25 +1,45 @@
 tools:
   - name: request_access
     alias: request_access
-    description: A tool to request access, creating an approval request in SQLite
+    description: A tool to request access, creating an approval request in SQLite and sending a webhook notification
     type: python
     content: |
       import os
       import sqlite3
       import sys
       from datetime import datetime, timedelta
+      import requests
 
       USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
+      SLACK_CHANNEL_ID = os.getenv('SLACK_CHANNEL_ID')
+      SLACK_THREAD_TS = os.getenv('SLACK_THREAD_TS')
+      KUBIYA_USER_ORG = os.getenv('KUBIYA_USER_ORG')
+      KUBIYA_API_KEY = os.getenv('KUBIYA_API_KEY')
+      APPROVAL_SLACK_CHANNEL = os.getenv('APPROVAL_SLACK_CHANNEL')
 
       if not USER_EMAIL:
           print("Missing KUBIYA_USER_EMAIL environment variable")
           sys.exit(1)
 
       purpose = "{{.purpose}}"
-      ttl_minutes = int("{{.ttl}}")
+      ttl = "{{.ttl}}"
       policy_name = "{{.policy_name}}"
       permission_set_name = "{{.permission_set_name}}"
       policy_json = "{{.policy_json}}"
+
+      try:
+          if ttl[-1] == 'm':
+              ttl_minutes = int(ttl[:-1])
+          elif ttl[-1] == 'h':
+              ttl_minutes = int(ttl[:-1]) * 60
+          elif ttl[-1] == 'd':
+              ttl_minutes = int(ttl[:-1]) * 60 * 24
+          else:
+              print("Error: Unsupported TTL format. Use 'm', 'h', or 'd'.")
+              sys.exit(1)
+      except ValueError:
+          print("Error: Invalid TTL format.")
+          sys.exit(1)
 
       approval_request = {
           'user_email': USER_EMAIL,
@@ -29,30 +49,75 @@ tools:
           'permission_set_name': permission_set_name,
           'policy_json': policy_json,
           'requested_at': datetime.utcnow(),
-          'expires_at': datetime.utcnow() + timedelta(minutes=ttl_minutes)
+          'expires_at': datetime.utcnow() + timedelta(minutes=ttl_minutes),
+          'slack_channel_id': SLACK_CHANNEL_ID,
+          'slack_thread_ts': SLACK_THREAD_TS,
+          'approved': 'pending'
       }
 
       conn = sqlite3.connect('/data/approval_requests.db')
       c = conn.cursor()
       c.execute('''CREATE TABLE IF NOT EXISTS approvals
-                   (user_email text, purpose text, ttl_minutes int, policy_name text, permission_set_name text, policy_json text, requested_at text, expires_at text, approved text)''')
+                   (user_email text, purpose text, ttl_minutes int, policy_name text, permission_set_name text, policy_json text, requested_at text, expires_at text, slack_channel_id text, slack_thread_ts text, approved text)''')
 
-      c.execute("INSERT INTO approvals (user_email, purpose, ttl_minutes, policy_name, permission_set_name, policy_json, requested_at, expires_at, approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      c.execute("INSERT INTO approvals (user_email, purpose, ttl_minutes, policy_name, permission_set_name, policy_json, requested_at, expires_at, slack_channel_id, slack_thread_ts, approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (approval_request['user_email'], approval_request['purpose'], 
                  approval_request['ttl_minutes'], approval_request['policy_name'], approval_request['permission_set_name'], 
-                 approval_request['policy_json'], approval_request['requested_at'], approval_request['expires_at'], 'pending'))
+                 approval_request['policy_json'], approval_request['requested_at'], approval_request['expires_at'], 
+                 approval_request['slack_channel_id'], approval_request['slack_thread_ts'], 'pending'))
 
       conn.commit()
       conn.close()
 
-      print(f"Approval request created for {USER_EMAIL} with purpose: {purpose}")
+      # Create and send webhook
+      prompt = f"User {USER_EMAIL} just asked for approval in order to perform {policy_name} for purpose: {purpose}. They want the access to remain active for {ttl} (ttl is mandatory, format: 1m, 1h, 1d). Ask the team if they would like to approve this request and allow the user to do the operation. In case they do, use the approve_request command. Make sure you have gathered all of the details before doing that."
+      
+      payload = {
+          "agent_id": os.getenv('KUBIYA_AGENT_UUID', 'default-agent-id'),
+          "communication": {
+              "destination": APPROVAL_SLACK_CHANNEL,
+              "method": "Slack"
+          },
+          "created_at": datetime.utcnow().isoformat() + "Z",
+          "created_by": USER_EMAIL,
+          "id": "",
+          "name": "Approval Request",
+          "org": KUBIYA_USER_ORG,
+          "prompt": prompt,
+          "source": "Kubiya Agent",
+          "updated_at": datetime.utcnow().isoformat() + "Z"
+      }
+
+      response = requests.post(
+          "https://api.kubiya.ai/api/v1/event",
+          headers={
+              'Content-Type': 'application/json',
+              'Authorization': f'Bearer {KUBIYA_API_KEY}'
+          },
+          json=payload
+      )
+
+      if response.status_code < 300:
+          print(f"Event created successfully. Response: {response.text}")
+          event_response = response.json()
+          webhook_url = event_response.get("webhook_url")
+          if webhook_url:
+              requests.post(
+                  webhook_url,
+                  headers={'Content-Type': 'application/json'},
+                  json=payload
+              )
+          else:
+              print("Error: No webhook URL returned in the response.")
+      else:
+          print(f"Error: {response.status_code} - {response.text}")
 
     args:
       purpose:
         description: The purpose of the request
         required: true
       ttl:
-        description: Time to live for the request in minutes
+        description: "Time to live for the request (format: 1m, 1h, 1d)"
         required: true
       policy_name:
         description: The name of the customer managed policy to create
@@ -65,93 +130,228 @@ tools:
         required: true
     env:
       - KUBIYA_USER_EMAIL
+      - SLACK_CHANNEL_ID
+      - SLACK_THREAD_TS
+      - KUBIYA_AGENT_UUID
+      - KUBIYA_USER_ORG
+      - KUBIYA_API_KEY
+      - APPROVAL_SLACK_CHANNEL
     with_volumes:
       - name: sqlite_data
         path: /data
 
-  - name: check_access
-    alias: check_access
-    description: A tool to check if a user has access based on approved requests in SQLite
+  - name: approve_request
+    alias: approve_request
+    description: A tool to approve or reject a request if the approver is in the admin group and send a Slack notification
     type: python
     content: |
       import os
       import sqlite3
       import sys
+      from datetime import datetime, timedelta
+      import requests
 
-      USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
+      APPROVER_USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
+      APPROVING_USERS = os.getenv('APPROVING_USERS', '').split(',')
+      SLACK_API_TOKEN = os.getenv('SLACK_API_TOKEN')
+      KUBIYA_API_KEY = os.getenv('KUBIYA_API_KEY')
 
-      if not USER_EMAIL:
-          print("Missing KUBIYA_USER_EMAIL environment variable")
+      if not APPROVER_USER_EMAIL:
+          print("Missing APPROVER_USER_EMAIL environment variable")
           sys.exit(1)
 
-      purpose = "{{.purpose}}"
-      policy_name = "{{.policy_name}}"
-      permission_set_name = "{{.permission_set_name}}"
-      policy_json = "{{.policy_json}}"
-      ttl_minutes = int("{{.ttl}}")
+      if APPROVER_USER_EMAIL not in APPROVING_USERS:
+          print(f"User {APPROVER_USER_EMAIL} is not authorized to approve this request")
+          sys.exit(1)
+
+      request = "{{.request}}"
+      user_email = "{{.user_email}}"
+      approval_action = "{{.approval_action}}"
 
       conn = sqlite3.connect('/data/approval_requests.db')
       c = conn.cursor()
 
-      # Check if the table exists
-      c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='approvals'")
-      if not c.fetchone():
-          print("The approvals table does not exist.")
+      # Remove expired requests
+      c.execute("DELETE FROM approvals WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
+      conn.commit()
+
+      c.execute("SELECT * FROM approvals WHERE user_email=? AND policy_name=? AND approved='pending'", (user_email, request))
+      approval_request = c.fetchone()
+
+      if not approval_request:
+          print(f"No pending approval request found for user {user_email} and request {request}")
           sys.exit(1)
 
-      c.execute("SELECT * FROM approvals WHERE user_email=? AND purpose=? AND policy_name=? AND permission_set_name=? AND policy_json=? AND ttl_minutes=? AND approved='approved'",
-                (USER_EMAIL, purpose, policy_name, permission_set_name, policy_json, ttl_minutes))
-      approval = c.fetchone()
-
+      c.execute("UPDATE approvals SET approved=? WHERE user_email=? AND policy_name=?", (approval_action, user_email, request))
+      conn.commit()
       conn.close()
 
-      if not approval:
-          print(f"User {USER_EMAIL} does not have access for the provided details")
-          sys.exit(1)
+      print(f"Approval request for user {user_email} and request {request} has been {approval_action}")
 
-      print(f"User {USER_EMAIL} has access")
+      if approval_action == "approved":
+          # Schedule task for deletion
+          duration = f"{approval_request[2]}m"
+          task_payload = {
+              "execution_delay": duration,
+              "task_description": "delete_permission_set",
+              "channel_id": approval_request[8],
+              "user_email": user_email,
+              "organization_name": os.getenv("KUBIYA_USER_ORG"),
+              "agent": os.getenv("KUBIYA_AGENT_PROFILE")
+          }
+          response = requests.post(
+              'https://api.kubiya.ai/api/v1/scheduled_tasks',
+              headers={
+                  'Authorization': f'UserKey {KUBIYA_API_KEY}',
+                  'Content-Type': 'application/json'
+              },
+              json=task_payload
+          )
+
+          if response.status_code < 300:
+              print(f"Task scheduled successfully. Response: {response.text}")
+          else:
+              print(f"Error: {response.status_code} - {response.text}")
+
+      slack_channel_id = approval_request[8]
+      slack_thread_ts = approval_request[9]
+
+      # Get permalink
+      permalink_response = requests.get(
+          "https://slack.com/api/chat.getPermalink",
+          params={
+              'channel': slack_channel_id,
+              'message_ts': slack_thread_ts
+          },
+          headers={
+              'Authorization': f'Bearer {SLACK_API_TOKEN}'
+          }
+      )
+      permalink = permalink_response.json().get("permalink")
+
+      action_emoji = ":white_check_mark:" if approval_action == "approved" else ":x:"
+      action_text = "approved" if approval_action == "approved" else "rejected"
+      approver_text = f"<@{APPROVER_USER_EMAIL}> {action_text} this request {action_emoji}"
+
+      slack_payload = {
+          "channel": slack_channel_id,
+          "text": f"<@{user_email}>, your request has been {approval_action}.",
+          "blocks": [
+              {
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f"*Request {approval_action}* {action_emoji}\n*User:* <@{user_email}>\n*Purpose:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Approved by:* {approver_text}\n<{permalink}|View the original request>"
+                  }
+              },
+              {
+                  "type": "actions",
+                  "elements": [
+                      {
+                          "type": "button",
+                          "text": {
+                              "type": "plain_text",
+                              "text": "View Request"
+                          },
+                          "url": permalink
+                      }
+                  ]
+              }
+          ],
+          "thread_ts": slack_thread_ts
+      }
+
+      slack_response = requests.post(
+          "https://slack.com/api/chat.postMessage",
+          headers={
+              'Content-Type': 'application/json',
+              'Authorization': f'Bearer {SLACK_API_TOKEN}'
+          },
+          json=slack_payload
+      )
+
+      if slack_response.status_code < 300:
+          print(f"Slack notification sent successfully. Response: {slack_response.text}")
+      else:
+          print(f"Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
 
     args:
-      purpose:
-        description: The purpose of the request
+      request:
+        description: The request being approved or rejected
         required: true
-      policy_name:
-        description: The name of the customer managed policy to create
+      user_email:
+        description: The email of the user making the request
         required: true
-      permission_set_name:
-        description: The name of the permission set to update
+      approval_action:
+        description: Approval action (approved or rejected)
         required: true
-      policy_json:
-        description: The JSON policy to apply to the customer managed policy
-        required: true
-      ttl:
-        description: Time to live for the request in minutes
-        required: true
+        options:
+          - approved
+          - rejected
     env:
       - KUBIYA_USER_EMAIL
+      - APPROVING_USERS
+      - SLACK_API_TOKEN
+      - KUBIYA_API_KEY
     with_volumes:
       - name: sqlite_data
         path: /data
 
-  - name: update-sso-permission-set
+  - name: view_requests
+    alias: view_requests
+    description: A tool to view current access requests from SQLite database
+    type: python
+    content: |
+      import os
+      import sqlite3
+      import json
+
+      conn = sqlite3.connect('/data/approval_requests.db')
+      c = conn.cursor()
+
+      c.execute("SELECT * FROM approvals WHERE approved='pending'")
+      requests = c.fetchall()
+      conn.close()
+
+      requests_list = []
+      for request in requests:
+          request_data = {
+              "user_email": request[0],
+              "purpose": request[1],
+              "ttl_minutes": request[2],
+              "policy_name": request[3],
+              "permission_set_name": request[4],
+              "policy_json": request[5],
+              "requested_at": request[6],
+              "expires_at": request[7],
+              "slack_channel_id": request[8],
+              "slack_thread_ts": request[9],
+              "approved": request[10]
+          }
+          requests_list.append(request_data)
+
+      print(json.dumps(requests_list, indent=2))
+
+    with_volumes:
+      - name: sqlite_data
+        path: /data
+
+  - name: update_sso_permission_set
+    alias: update-permission-set
     description: A Python script to create a customer managed policy, attach it to an SSO permission set, update the permission set, and provision the permission set
     type: python
-    alias: update-permission-set
     content: |
+      import os
+      import sqlite3
+      import sys
       import boto3
       from botocore.exceptions import ClientError
-      import os
-      import sys
-      import configparser
       import json
-      from io import StringIO
-      import sqlite3
-      from datetime import datetime, timedelta
 
-      def check_user_access(user_email):
+      def check_approval_status(user_email, policy_name):
           conn = sqlite3.connect('/data/approval_requests.db')
           c = conn.cursor()
-          c.execute("SELECT * FROM approvals WHERE user_email=? AND approved='approved'", (user_email,))
+          c.execute("SELECT * FROM approvals WHERE user_email=? AND policy_name=? AND approved='approved'", (user_email, policy_name))
           approval = c.fetchone()
           conn.close()
           return approval is not None
@@ -162,41 +362,36 @@ tools:
           print("Missing KUBIYA_USER_EMAIL environment variable")
           sys.exit(1)
 
-      if not check_user_access(USER_EMAIL):
-          print(f"User {USER_EMAIL} does not have access to perform this action")
+      permission_set_name = "{{.permission_set_name}}"
+      policy_name = "{{.policy_name}}"
+      policy_json = "{{.policy_json}}"
+
+      if not check_approval_status(USER_EMAIL, policy_name):
+          print(f"User {USER_EMAIL} does not have approval to perform the requested operation.")
           sys.exit(1)
 
-      aws_creds_content = """{{.aws_creds_content}}"""
-      permission_set_name = """{{.permission_set_name}}"""
-      policy_name = """{{.policy_name}}"""
-      policy_json = """{{.policy_json}}"""
-      ttl_minutes = int("""{{.ttl}}""")
-
-      instance_arn = os.getenv('SSO_INSTANCE_ARN')
-
-      if not instance_arn:
-          print("Error: Environment variable SSO_INSTANCE_ARN not set.")
+      # Load AWS credentials from default location
+      aws_creds_path = '/root/.aws/credentials'
+      if not os.path.exists(aws_creds_path):
+          print(f"Error: AWS credentials file not found at {aws_creds_path}")
           sys.exit(1)
 
-      config = configparser.ConfigParser()
-      config.read_string(aws_creds_content)
+      with open(aws_creds_path, 'r') as f:
+          aws_creds = f.read()
 
-      aws_access_key_id = None
-      aws_secret_access_key = None
-      aws_session_token = None
-      region_name = None
+      # Parse the AWS credentials
+      aws_creds_dict = {}
+      for line in aws_creds.splitlines():
+          if '=' in line:
+              key, value = line.split('=', 1)
+              aws_creds_dict[key.strip()] = value.strip()
 
-      for section in config.sections():
-          if 'aws_access_key_id' in config[section]:
-              aws_access_key_id = config[section]['aws_access_key_id']
-          if 'aws_secret_access_key' in config[section]:
-              aws_secret_access_key = config[section]['aws_secret_access_key']
-          if 'aws_session_token' in config[section]:
-              aws_session_token = config[section]['aws_session_token']
-          if 'region' in config[section]:
-              region_name = config[section]['region']
+      aws_access_key_id = aws_creds_dict.get('aws_access_key_id')
+      aws_secret_access_key = aws_creds_dict.get('aws_secret_access_key')
+      aws_session_token = aws_creds_dict.get('aws_session_token')
+      region_name = aws_creds_dict.get('region')
 
-      if not all([aws_access_key_id, aws_secret_access_key, aws_session_token, region_name]):
+      if not all([aws_access_key_id, aws_secret_access_key, region_name]):
           print("Error: Missing required AWS credentials.")
           sys.exit(1)
 
@@ -213,6 +408,11 @@ tools:
       sso_admin_client = session.client('sso-admin')
 
       try:
+          instance_arn = os.getenv('SSO_INSTANCE_ARN')
+          if not instance_arn:
+              print("Error: Environment variable SSO_INSTANCE_ARN not set.")
+              sys.exit(1)
+
           # List all permission sets and find the ARN for the given name
           response = sso_admin_client.list_permission_sets(
               InstanceArn=instance_arn
@@ -266,28 +466,12 @@ tools:
               TargetType='ALL_PROVISIONED_ACCOUNTS'
           )
           print("Permission set provisioned successfully.")
-
-          # Schedule the removal task
-          schedule_time = (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat() + "Z"
-          schedule_task(schedule_time, policy_name, permission_set_arn)
-
       except ClientError as e:
           print(f"Error: {e}")
       except json.JSONDecodeError as e:
           print(f"Error parsing policy JSON: {e}")
 
-      def schedule_task(schedule_time, policy_name, permission_set_arn):
-          # Here we assume there's a function to schedule a task, it should be implemented accordingly.
-          # This is a placeholder for the actual scheduling implementation.
-          print(f"Scheduled task to remove policy '{policy_name}' from permission set '{permission_set_arn}' at {schedule_time}")
-
-    dependencies: |
-      boto3==1.34.125
-      sqlite
     args:
-      aws_creds_content:
-        description: Contents of the AWS credentials file
-        required: true
       permission_set_name:
         description: The name of the permission set to update
         required: true
@@ -297,98 +481,109 @@ tools:
       policy_json:
         description: The JSON policy to apply to the customer managed policy
         required: true
-      ttl:
-        description: Time to live for the request in minutes
-        required: true
     env:
       - KUBIYA_USER_EMAIL
       - SSO_INSTANCE_ARN
     with_volumes:
       - name: sqlite_data
         path: /data
+    with_files:
+      - source: /root/.aws/credentials
+        destination: /root/.aws/credentials
 
-  - name: approve_request
-    alias: approve_request
-    description: A tool to approve a request if the approver is in the admin group
+  - name: delete_permission_set
+    alias: delete-permission-set
+    description: A Python script to delete an SSO permission set
     type: python
     content: |
       import os
-      import sqlite3
-      import sys
-      from datetime import datetime
+      import boto3
+      from botocore.exceptions import ClientError
 
-      APPROVER_USER_EMAIL = os.getenv('APPROVER_USER_EMAIL')
+      USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
 
-      if not APPROVER_USER_EMAIL:
-          print("Missing APPROVER_USER_EMAIL environment variable")
+      if not USER_EMAIL:
+          print("Missing KUBIYA_USER_EMAIL environment variable")
           sys.exit(1)
 
-      if APPROVER_USER_EMAIL not in os.getenv('APPROVING_USERS', '').split(','):
-          print(f"User {APPROVER_USER_EMAIL} is not authorized to approve this request")
+      permission_set_name = "{{.permission_set_name}}"
+
+      # Load AWS credentials from default location
+      aws_creds_path = '/root/.aws/credentials'
+      if not os.path.exists(aws_creds_path):
+          print(f"Error: AWS credentials file not found at {aws_creds_path}")
           sys.exit(1)
 
-      request = "{{.request}}"
-      user_email = "{{.user_email}}"
-      approval_action = "{{.approval_action}}"
+      with open(aws_creds_path, 'r') as f:
+          aws_creds = f.read()
 
-      conn = sqlite3.connect('/data/approval_requests.db')
-      c = conn.cursor()
+      # Parse the AWS credentials
+      aws_creds_dict = {}
+      for line in aws_creds.splitlines():
+          if '=' in line:
+              key, value = line.split('=', 1)
+              aws_creds_dict[key.strip()] = value.strip()
 
-      # Remove expired requests
-      c.execute("DELETE FROM approvals WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
-      conn.commit()
+      aws_access_key_id = aws_creds_dict.get('aws_access_key_id')
+      aws_secret_access_key = aws_creds_dict.get('aws_secret_access_key')
+      aws_session_token = aws_creds_dict.get('aws_session_token')
+      region_name = aws_creds_dict.get('region')
 
-      c.execute("SELECT * FROM approvals WHERE user_email=? AND request=? AND approved='pending'", (user_email, request))
-      approval_request = c.fetchone()
-
-      if not approval_request:
-          print(f"No pending approval request found for user {user_email} and request {request}")
+      if not all([aws_access_key_id, aws_secret_access_key, region_name]):
+          print("Error: Missing required AWS credentials.")
           sys.exit(1)
 
-      c.execute("UPDATE approvals SET approved=? WHERE user_email=? AND request=?", (approval_action, user_email, request))
-      conn.commit()
-      conn.close()
+      # Initialize boto3 session
+      session = boto3.Session(
+          aws_access_key_id=aws_access_key_id,
+          aws_secret_access_key=aws_secret_access_key,
+          aws_session_token=aws_session_token,
+          region_name=region_name
+      )
 
-      print(f"Approval request for user {user_email} and request {request} has been {approval_action}")
+      sso_admin_client = session.client('sso-admin')
+
+      try:
+          instance_arn = os.getenv('SSO_INSTANCE_ARN')
+          if not instance_arn:
+              print("Error: Environment variable SSO_INSTANCE_ARN not set.")
+              sys.exit(1)
+
+          # List all permission sets and find the ARN for the given name
+          response = sso_admin_client.list_permission_sets(
+              InstanceArn=instance_arn
+          )
+
+          permission_set_arn = None
+          for permission_set in response['PermissionSets']:
+              permission_set_details = sso_admin_client.describe_permission_set(
+                  InstanceArn=instance_arn,
+                  PermissionSetArn=permission_set
+              )
+              if permission_set_details['PermissionSet']['Name'] == permission_set_name:
+                  permission_set_arn = permission_set
+                  break
+
+          if not permission_set_arn:
+              print(f"Error: Permission set with name '{permission_set_name}' not found.")
+              sys.exit(1)
+
+          # Delete the permission set
+          sso_admin_client.delete_permission_set(
+              InstanceArn=instance_arn,
+              PermissionSetArn=permission_set_arn
+          )
+          print(f"Permission set '{permission_set_name}' deleted successfully.")
+      except ClientError as e:
+          print(f"Error: {e}")
 
     args:
-      request:
-        description: The request being approved or rejected
+      permission_set_name:
+        description: The name of the permission set to delete
         required: true
-        options_from:
-          script: |
-            import sqlite3
-            conn = sqlite3.connect('/data/approval_requests.db')
-            c = conn.cursor()
-            c.execute("SELECT DISTINCT request FROM approvals WHERE approved='pending'")
-            requests = c.fetchall()
-            conn.close()
-            options = [request[0] for request in requests]
-            for option in options:
-                print(option)
-      user_email:
-        description: The email of the user making the request
-        required: true
-        options_from:
-          script: |
-            import sqlite3
-            conn = sqlite3.connect('/data/approval_requests.db')
-            c = conn.cursor()
-            c.execute("SELECT DISTINCT user_email FROM approvals WHERE approved='pending'")
-            users = c.fetchall()
-            conn.close()
-            options = [user[0] for user in users]
-            for option in options:
-                print(option)
-      approval_action:
-        description: Approval action (approved or rejected)
-        required: true
-        options:
-          - approved
-          - rejected
     env:
-      - APPROVER_USER_EMAIL
-      - APPROVING_USERS
-    with_volumes:
-      - name: sqlite_data
-        path: /data
+      - KUBIYA_USER_EMAIL
+      - SSO_INSTANCE_ARN
+    with_files:
+      - source: /root/.aws/credentials
+        destination: /root/.aws/credentials
