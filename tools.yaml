@@ -1,7 +1,7 @@
 tools:
   - name: request_access
     alias: request_access
-    description: A tool to request access, creating an approval request in SQLite and sending a webhook notification
+    description: A tool to request access, generating an IAM policy based on a description and creating an approval request in SQLite and sending a webhook notification.
     type: python
     content: |
       import os
@@ -9,6 +9,7 @@ tools:
       import sys
       from datetime import datetime, timedelta
       import requests
+      from litellm import completion
 
       USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
       SLACK_CHANNEL_ID = os.getenv('SLACK_CHANNEL_ID')
@@ -16,16 +17,30 @@ tools:
       KUBIYA_USER_ORG = os.getenv('KUBIYA_USER_ORG')
       KUBIYA_API_KEY = os.getenv('KUBIYA_API_KEY')
       APPROVAL_SLACK_CHANNEL = os.getenv('APPROVAL_SLACK_CHANNEL')
+      AWS_REGION = os.getenv('AWS_REGION')
+      OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+      OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 
-      if not USER_EMAIL:
-          print("Missing KUBIYA_USER_EMAIL environment variable")
+      if not all([USER_EMAIL, SLACK_CHANNEL_ID, SLACK_THREAD_TS, KUBIYA_USER_ORG, KUBIYA_API_KEY, APPROVAL_SLACK_CHANNEL, AWS_REGION, OPENAI_API_KEY, OPENAI_API_BASE]):
+          print("All required environment variables must be set.\n\nRequired environment variables:\n- KUBIYA_USER_EMAIL\n- SLACK_CHANNEL_ID\n- SLACK_THREAD_TS\n- KUBIYA_USER_ORG\n- KUBIYA_API_KEY\n- APPROVAL_SLACK_CHANNEL\n- AWS_REGION\n- OPENAI_API_KEY\n- OPENAI_API_BASE")
           sys.exit(1)
 
       purpose = "{{.purpose}}"
       ttl = "{{.ttl}}"
       policy_name = "{{.policy_name}}"
       permission_set_name = "{{.permission_set_name}}"
-      policy_json = "{{.policy_json}}"
+      policy_description = "{{.policy_description}}"
+
+      def generate_policy(policy_description: str) -> str:
+          messages = [{"content": policy_description, "role": "user"}]
+          try:
+              response = completion(model="azure/gpt-4o", messages=messages)
+              return response['choices'][0]['message']['content']
+          except Exception as e:
+              print(f"Policy generation failed: {e}")
+              sys.exit(1)
+
+      policy_json = generate_policy(policy_description)
 
       try:
           if ttl[-1] == 'm':
@@ -125,8 +140,8 @@ tools:
       permission_set_name:
         description: The name of the permission set to update
         required: true
-      policy_json:
-        description: The JSON policy to apply to the customer managed policy
+      policy_description:
+        description: A description of the policy to generate
         required: true
     env:
       - KUBIYA_USER_EMAIL
@@ -136,6 +151,9 @@ tools:
       - KUBIYA_USER_ORG
       - KUBIYA_API_KEY
       - APPROVAL_SLACK_CHANNEL
+      - AWS_REGION
+      - OPENAI_API_KEY
+      - OPENAI_API_BASE
     with_volumes:
       - name: sqlite_data
         path: /sqlite_data
