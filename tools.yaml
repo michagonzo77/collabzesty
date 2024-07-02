@@ -138,7 +138,7 @@ tools:
       - APPROVAL_SLACK_CHANNEL
     with_volumes:
       - name: sqlite_data
-        path: /data
+        path: /sqlite_data
 
   - name: approve_request
     alias: approve_request
@@ -295,7 +295,7 @@ tools:
       - KUBIYA_API_KEY
     with_volumes:
       - name: sqlite_data
-        path: /data
+        path: /sqlite_data
 
   - name: view_requests
     alias: view_requests
@@ -334,7 +334,7 @@ tools:
 
     with_volumes:
       - name: sqlite_data
-        path: /data
+        path: /sqlite_data
 
   - name: update_sso_permission_set
     alias: update-permission-set
@@ -486,7 +486,7 @@ tools:
       - SSO_INSTANCE_ARN
     with_volumes:
       - name: sqlite_data
-        path: /data
+        path: /sqlite_data
     with_files:
       - source: /root/.aws/credentials
         destination: /root/.aws/credentials
