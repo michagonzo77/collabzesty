@@ -15,7 +15,7 @@ provider "kubiya" {
 resource "kubiya_agent" "agent" {
   // Mandatory Fields
   name         = "Grant Temporary Elevated Permissions" // String
-  runner       = "aks-dev"     // String
+  runner       = "aks-dev"                              // String
   description  = <<EOT
 Grant Temporary Elevated Permissions is an agent that manages the provision of temporary elevated permissions, including creating and assigning policies with time-bound access to AWS resources.
 EOT
@@ -32,23 +32,23 @@ EOT
   // Optional Fields:
   // Arrays
   secrets      = []
-  integrations = ["kubiyamichaelg","slack"]
+  integrations = ["kubiyamichaelg", "slack"]
   users        = []
   groups       = ["Admin", "Users"]
-  links = []
+  links        = []
   environment_variables = {
-    DEBUG            = "1"
-    KUBIYA_DEBUG     = "1"
-    LOG_LEVEL        = "INFO"
-    KUBIYA_TOOL_CONFIG_URLS        = "https://github.com/michagonzo77/collabzesty"
-    TOOLS_MANAGER_URL        = "http://localhost:3001"
+    DEBUG                   = "1"
+    KUBIYA_DEBUG            = "1"
+    LOG_LEVEL               = "INFO"
+    KUBIYA_TOOL_CONFIG_URLS = "https://github.com/michagonzo77/collabzesty"
+    TOOLS_MANAGER_URL       = "http://localhost:3001"
     TOOLS_SERVER_URL        = "http://localhost:3001"
-    TOOL_MANAGER_LOG_FILE        = "/tmp/tool-manager.log"
-    TOOL_SERVER_URL        = "http://localhost:3001" 
+    TOOL_MANAGER_LOG_FILE   = "/tmp/tool-manager.log"
+    TOOL_SERVER_URL         = "http://localhost:3001"
     SSO_INSTANCE_ARN        = "arn:aws:sso:::instance/ssoins-7223725edfa9d76b"
-    SCHEDULE_TASK        = "1"
-    APPROVING_USERS      = "michael.gonzalez@kubiya.ai"
-    APPROVAL_SLACK_CHANNEL     = "#devops-oncall"
+    SCHEDULE_TASK           = "1"
+    APPROVING_USERS         = "michael.gonzalez@kubiya.ai"
+    APPROVAL_SLACK_CHANNEL  = "#devops-oncall"
 
   }
 }

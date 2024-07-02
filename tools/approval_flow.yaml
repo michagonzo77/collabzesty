@@ -80,21 +80,20 @@ tools:
       conn.close()
 
       # Create and send webhook
-      prompt = f"User {USER_EMAIL} just asked for approval in order to perform {policy_name} for purpose: {purpose}. They want the access to remain active for {ttl} (ttl is mandatory, format: 1m, 1h, 1d). Ask the team if they would like to approve this request and allow the user to do the operation. In case they do, use the approve_request command. Make sure you have gathered all of the details before doing that."
+      prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privilaged policy {user_email} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request"
       
       payload = {
-          "agent_id": os.getenv('KUBIYA_AGENT_UUID', 'default-agent-id'),
+          "agent_id": os.getenv('KUBIYA_AGENT_UUID'),
           "communication": {
               "destination": APPROVAL_SLACK_CHANNEL,
               "method": "Slack"
           },
           "created_at": datetime.utcnow().isoformat() + "Z",
           "created_by": USER_EMAIL,
-          "id": "",
           "name": "Approval Request",
           "org": KUBIYA_USER_ORG,
           "prompt": prompt,
-          "source": "Kubiya Agent",
+          "source": "Triggered by an access request (Agent)",
           "updated_at": datetime.utcnow().isoformat() + "Z"
       }
 
