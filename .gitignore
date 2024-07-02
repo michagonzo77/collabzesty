@@ -1,7 +1,3 @@
-# Ignore Terraform state files
-*.tfstate
-*.tfstate.*
-
 # Ignore Terraform lock files
 *.tflock
 *.terraform.lock.hcl
@@ -31,3 +27,4 @@ override.tf.json
 
 # Ignore macOS .DS_Store files
 .DS_Store
+
