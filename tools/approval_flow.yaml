@@ -89,7 +89,7 @@ tools:
       }
 
       # Create and send webhook
-      prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privilaged policy {USER_EMAIL} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request - here's the full request information:\n\n{entry}"
+      prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privilaged policy {USER_EMAIL} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request - here's the full request information:\n\n{entry} - FIRST THING you should do is ask if this is a valid request and if you should approve it. DO NOT RUN ANY COMMANDS UNTIL YOU HAVE VERIFIED THE REQUEST."
       
       payload = {
           "agent_id": os.getenv('KUBIYA_AGENT_UUID'),
@@ -166,7 +166,7 @@ tools:
 
   - name: approve_request
     alias: approve_request
-    description: A tool to approve or reject a request if the approver is in the admin group and send a Slack notification
+    description: Allows to approve or reject a pending access request - updates the requester and sends a Slack notification
     type: python
     content: |
       import os
@@ -265,7 +265,7 @@ tools:
                   "type": "section",
                   "text": {
                       "type": "mrkdwn",
-                      "text": f"*Request {approval_action}* {action_emoji}\n*User:* <@{user_email}>\n*Purpose:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Approved by:* {approver_text}\n<{permalink}|View the original request>"
+                      "text": f"*Request {approval_action}* {action_emoji}\n*User:* <@{user_email}>\n*Purpose:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Approved by:* {approver_text}\n<{permalink}|View original conversation>"
                   }
               },
               {
