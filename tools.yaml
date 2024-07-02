@@ -132,7 +132,7 @@ tools:
         description: The purpose of the request
         required: true
       ttl:
-        description: "Time to live for the request (format: 1m, 1h, 1d)"
+        description: "Time to live for the request (format: 1m, 1h, 1d - only minutes (m), hours (h), and days (d) are supported)"
         required: true
       policy_name:
         description: The name of the customer managed policy to create
@@ -141,7 +141,7 @@ tools:
         description: The name of the permission set to update
         required: true
       policy_description:
-        description: A description of the policy to generate
+        description: "A NATURAL LANGUAGE description of the policy to generate - this will be used to generate the policy JSON - should be a precise description of the permissions required, eg: 'Allow the user to read from the S3 bucket named 'my-bucket' and write to the DynamoDB table named 'my-table'.'"
         required: true
     env:
       - KUBIYA_USER_EMAIL
