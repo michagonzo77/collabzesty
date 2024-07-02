@@ -17,13 +17,8 @@ tools:
       KUBIYA_USER_ORG = os.getenv('KUBIYA_USER_ORG')
       KUBIYA_API_KEY = os.getenv('KUBIYA_API_KEY')
       APPROVAL_SLACK_CHANNEL = os.getenv('APPROVAL_SLACK_CHANNEL')
-      AWS_REGION = os.getenv('AWS_REGION')
       OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
       OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
-
-      if not all([USER_EMAIL, SLACK_CHANNEL_ID, SLACK_THREAD_TS, KUBIYA_USER_ORG, KUBIYA_API_KEY, APPROVAL_SLACK_CHANNEL, AWS_REGION, OPENAI_API_KEY, OPENAI_API_BASE]):
-          print("All required environment variables must be set.\n\nRequired environment variables:\n- KUBIYA_USER_EMAIL\n- SLACK_CHANNEL_ID\n- SLACK_THREAD_TS\n- KUBIYA_USER_ORG\n- KUBIYA_API_KEY\n- APPROVAL_SLACK_CHANNEL\n- AWS_REGION\n- OPENAI_API_KEY\n- OPENAI_API_BASE")
-          sys.exit(1)
 
       purpose = "{{.purpose}}"
       ttl = "{{.ttl}}"
