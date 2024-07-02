@@ -255,7 +255,6 @@ tools:
       - AWS_PROFILE
     dependencies: |
         boto3
-        requests
     with_files:
       - source: /root/.aws/credentials
         destination: /root/.aws/credentials
