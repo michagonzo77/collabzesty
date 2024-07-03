@@ -156,18 +156,24 @@ tools:
             print(f"Error: {e}")
 
     dependencies: |
-      boto3==1.34.125
+      boto3
+      requests
     args:
       permission_set_name:
         description: The name of the permission set to update
         required: true
       policy_name:
-        description: The name of the customer managed policy to detach and delete
+        description: The name of the customer managed policy to create
         required: true
     env:
-      - SSO_INSTANCE_ARN # The ARN of the SSO instance to update
+      - KUBIYA_USER_EMAIL # The email address of the user requesting the operation (injected automatically by Kubiya)
       - AWS_PROFILE # The AWS profile to use for the operation (injected automatically by Kubiya)
-    # Mount the AWS credentials file in the container from the execution environment
+      - SSO_INSTANCE_ARN # The ARN of the SSO instance to update
+    # Volumes and files to mount in the container for the database persistence
+    with_volumes:
+      - name: sqlite_data
+        path: /sqlite_data
+    # Get the AWS credentials from the execution environment
     with_files:
-        - source: /home/appuser/.aws/credentials
-          destination: /root/.aws/credentials
+      - source: /home/appuser/.aws/credentials
+        destination: /root/.aws/credentials
