@@ -117,7 +117,7 @@ tools:
       }
 
       # Create and send webhook
-      prompt = f"You are an access management assistant. You are currently conversing with an approving group. Your task is to help the approving group decide whether to approve the following access request. You have a new access request from {USER_EMAIL} for the following purpose: {purpose}. The request will expire in {ttl}. The ID of the request is {request_id}. The policy to be created is: ```{policy_json}```"
+      prompt = f"You are an access management assistant. You are currently conversing with an approving group. Your task is to help the approving group decide whether to approve the following access request. You have a new access request from {USER_EMAIL} for the following purpose: {purpose}. The request will expire in {ttl}. The ID of the request is {request_id}. The policy to be created is: ```{policy_json}```\n\nCAREFULLY ASK IF YOU CAN MOVE FORWARD WITH THIS REQUEST. DO NOT EXECUTE THE REQUEST UNTIL YOU HAVE RECEIVED APPROVAL FROM THE USER YOU ARE ASSISTING."
       
       payload = {
           "agent_id": os.getenv('KUBIYA_AGENT_UUID'),
