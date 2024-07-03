@@ -251,7 +251,8 @@ tools:
           
           task_payload = {
               "execution_delay": duration_seconds,
-              "task_description": "delete_permission_set",
+              # TODO:: Notify both ends on Slack (easy to do with a dedicated Slack tool)
+              "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]}",
               "channel_id": approval_request[8],
               "user_email": approval_request[0],
               "organization_name": os.getenv("KUBIYA_USER_ORG"),
@@ -291,7 +292,7 @@ tools:
       action_text = "approved" if approval_action == "approved" else "rejected"
       approver_text = f"<@{APPROVER_USER_EMAIL}> {action_text} this request {action_emoji}"
 
-      slack_payload = {
+      slack_payload_main_thread = {
           "channel": slack_channel_id,
           "text": f"<@{approval_request[0]}>, your request has been {approval_action}.",
           "blocks": [
@@ -299,7 +300,7 @@ tools:
                   "type": "section",
                   "text": {
                       "type": "mrkdwn",
-                      "text": f"*Request {approval_action}* {action_emoji}\n*User:* <@{approval_request[0]}>\n*Purpose:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Approved by:* {approver_text}\n<{permalink}|View original conversation>"
+                      "text": f"*Request {approval_action}* {action_emoji}\n*Reason:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Approved by:* {approver_text}\n<{permalink}|View original conversation>"
                   }
               },
               {
@@ -309,7 +310,7 @@ tools:
                           "type": "button",
                           "text": {
                               "type": "plain_text",
-                              "text": "View Request"
+                              "text": "↗️💬 View Thread"
                           },
                           "url": permalink
                       }
@@ -317,6 +318,20 @@ tools:
               }
           ],
           "thread_ts": slack_thread_ts
+      }
+
+      slack_payload_in_thread = {
+          "channel": slack_channel_id,
+          "text": f"<@{approval_request[0]}>, your request has been {approval_action}.",
+          "blocks": [
+              {
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f"Good news! {approver_text} :tada:\n\nYou can now proceed with your request. Go ahead and try your brand new permissions! :rocket:\n\nNote: This permission will be removed automatically after {approval_request[2]} by the system."
+                  }
+              }
+          ]
       }
 
       slack_response = requests.post(
