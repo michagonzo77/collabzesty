@@ -48,11 +48,6 @@ tools:
       policy_json = generate_policy(policy_description)
       print(f"✅ Generated least privileged policy JSON:\n\n{policy_json}")
 
-      # Cleanup old requests
-      expiry_threshold = datetime.utcnow() - timedelta(days=30)
-      c.execute("DELETE FROM approvals WHERE expires_at < ?", (expiry_threshold.isoformat(),))
-      conn.commit()
-
       try:
           if ttl[-1] == 'm':
               ttl_minutes = int(ttl[:-1])
@@ -85,9 +80,18 @@ tools:
       }
 
       print(f"📝 Creating approval request with ID {request_id}")
-      
+
       conn = sqlite3.connect('/sqlite_data/approval_requests.db')
       c = conn.cursor()
+      
+      try:
+          # Cleanup old requests
+          expiry_threshold = datetime.utcnow() - timedelta(days=30)
+          c.execute("DELETE FROM approvals WHERE expires_at < ?", (expiry_threshold.isoformat(),))
+          conn.commit()
+      except sqlite3.OperationalError:
+          pass
+
       try:
           c.execute('''ALTER TABLE approvals ADD COLUMN request_id text''')
       except sqlite3.OperationalError:
