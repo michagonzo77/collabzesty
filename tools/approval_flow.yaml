@@ -30,12 +30,15 @@ tools:
           messages = [{"content": policy_description, "role": "user"}]
           try:
               response = completion(model="gpt-4o", messages=messages)
-              completion = response['choices'][0]['message']['content']
+              if not response['choices']:
+                  print("Error: No response from OpenAI API. Could not generate policy.")
+                  sys.exit(1)
+              content = response['choices'][0]['message']['content']
               # make sure we only return the policy
               # find JSON start and end
-              start = completion.find('{')
-              end = completion.rfind('}')
-              return completion[start:end+1]
+              start = content.find('{')
+              end = content.rfind('}')
+              return content[start:end+1]
           except Exception as e:
               print(f"Policy generation failed: {e}")
               sys.exit(1)
