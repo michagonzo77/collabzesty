@@ -358,7 +358,6 @@ tools:
       approval_action:
         description: Approval action (approved or rejected)
         required: true
-        # TODO:: Add validation for this field (choices: approved, rejected)
     env:
       - KUBIYA_USER_EMAIL # The email of the user approving the request
       - APPROVING_USERS # A comma-separated list of users who are authorized to approve requests
