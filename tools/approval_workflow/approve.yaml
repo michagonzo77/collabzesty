@@ -138,8 +138,7 @@ tools:
                               "type": "plain_text",
                               "text": "↗️💬 View Thread"
                           },
-                          "url": permalink,
-                          "action_id": "noop_action"
+                          "url": permalink
                       }
                   ]
               }
@@ -155,7 +154,7 @@ tools:
                   "type": "section",
                   "text": {
                       "type": "mrkdwn",
-                      "text": f"*Good news!* {approver_text} :tada:\n\nGo ahead and try your brand new permissions! :rocket:\n\nNote: This permission will be removed automatically after {approval_request[2]} minutes\n\nPermission policy statement JSON:\n```{approval_request[5]}```"
+                      "text": f"*Good news!* {approver_text} :tada:\n\nGo ahead and try your brand new permissions! :rocket:\n\nNote: This permission will be removed automatically after *{approval_request[2]}*\n\nPermission policy statement JSON:\n```{approval_request[5]}```"
                   }
               }
           ]
