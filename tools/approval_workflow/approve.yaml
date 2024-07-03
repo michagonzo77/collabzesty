@@ -49,6 +49,7 @@ tools:
 
       c.execute("UPDATE approvals SET approved=? WHERE request_id=?", (approval_action, request_id))
       conn.commit()
+      conn.close()
 
       print(f"✅ Approval request with ID {request_id} has been {approval_action}")
 
@@ -170,10 +171,12 @@ tools:
         )
 
         # Remove expired requests
+        conn = sqlite3.connect('/sqlite_data/approval_requests.db')
+        c = conn.cursor()
         c.execute("DELETE FROM approvals WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
         conn.commit()
         conn.close()
-
+        
         if slack_response.status_code < 300:
             print(f"✅ All done! Slack notification sent successfully")
         else:
