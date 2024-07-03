@@ -48,6 +48,11 @@ tools:
       policy_json = generate_policy(policy_description)
       print(f"✅ Generated least privileged policy JSON:\n\n{policy_json}")
 
+      # Cleanup old requests
+      expiry_threshold = datetime.utcnow() - timedelta(days=30)
+      c.execute("DELETE FROM approvals WHERE expires_at < ?", (expiry_threshold.isoformat(),))
+      conn.commit()
+
       try:
           if ttl[-1] == 'm':
               ttl_minutes = int(ttl[:-1])
@@ -64,8 +69,6 @@ tools:
 
       request_id = str(uuid.uuid4())
 
-      print("📝 Creating approval request...")
-
       approval_request = {
           'user_email': USER_EMAIL,
           'purpose': purpose,
@@ -81,6 +84,8 @@ tools:
           'request_id': request_id
       }
 
+      print(f"📝 Creating approval request with ID {request_id}")
+      
       conn = sqlite3.connect('/sqlite_data/approval_requests.db')
       c = conn.cursor()
       try:
@@ -98,12 +103,7 @@ tools:
                  approval_request['slack_channel_id'], approval_request['slack_thread_ts'], 'pending', approval_request['request_id']))
       conn.commit()
       print("✅ Approval request created successfully.")
-
-      # Cleanup old requests
-      expiry_threshold = datetime.utcnow() - timedelta(days=30)
-      c.execute("DELETE FROM approvals WHERE expires_at < ?", (expiry_threshold.isoformat(),))
-      conn.commit()
-      print("🧹 Cleaned up old, expired approval requests.")
+      
 
       conn.close()
 
