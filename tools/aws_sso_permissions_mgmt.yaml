@@ -133,11 +133,9 @@ tools:
           print(f"Error: {e}")
       except json.JSONDecodeError as e:
           print(f"Error parsing policy JSON: {e}")
-
     dependencies: |
-        boto3
-        requests
-        
+      boto3
+      requests
     args:
       permission_set_name:
         description: The name of the permission set to update
@@ -158,7 +156,6 @@ tools:
     with_files:
       - source: /home/appuser/.aws/credentials
         destination: /root/.aws/credentials
-
 
   - name: remove-customer-managed-policy-from-sso
     description: 'Remove a customer managed policy from an SSO permission set and deletes the policy - CAUTION: This action is irreversible'
