@@ -248,12 +248,14 @@ tools:
       if approval_action == "approved":
           duration_minutes = approval_request[2]
           duration_seconds = duration_minutes * 60
+
+          end_time = datetime.fromisoformat(approval_request[7])
           
           task_payload = {
               "execution_delay": duration_seconds,
               # TODO:: Notify both ends on Slack (easy to do with a dedicated Slack tool)
-              "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]}",
-              "channel_id": approval_request[8],
+              "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]} as the TTL has expired",
+              "channel_id": APPROVAL_SLACK_CHANNEL,
               "user_email": approval_request[0],
               "organization_name": os.getenv("KUBIYA_USER_ORG"),
               "agent": os.getenv("KUBIYA_AGENT_PROFILE")
@@ -268,7 +270,7 @@ tools:
           )
 
           if response.status_code < 300:
-              print(f"✅ Task to delete permission set scheduled successfully. Will be deleted in {duration_minutes} minutes.")
+              print(f"✅ Scheduled task to remove policy {approval_request[3]} from permission set {approval_request[4]} in {duration_minutes} minutes (expires at *{end_time}*)"
           else:
               print(f"❌ Error: {response.status_code} - {response.text}")
 
@@ -300,7 +302,7 @@ tools:
                   "type": "section",
                   "text": {
                       "type": "mrkdwn",
-                      "text": f"*Request {approval_action}* {action_emoji}\n*Reason:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Approved by:* {approver_text}\n<{permalink}|View original conversation>"
+                      "text": f"*Request {approval_action}* {action_emoji}\n*Reason:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Status:* {approver_text}\n<{permalink}|View original conversation>"
                   }
               },
               {
@@ -317,12 +319,12 @@ tools:
                   ]
               }
           ],
-          "thread_ts": slack_thread_ts
       }
 
       slack_payload_in_thread = {
           "channel": slack_channel_id,
           "text": f"<@{approval_request[0]}>, your request has been {approval_action}.",
+          "thread_ts": slack_thread_ts,
           "blocks": [
               {
                   "type": "section",
