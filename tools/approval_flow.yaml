@@ -28,6 +28,7 @@ tools:
       policy_description = "{{.policy_description}}"
 
       def generate_policy(policy_description: str) -> str:
+          print("✨ Generating policy...")
           messages = [{"content": policy_description, "role": "user"}]
           try:
               response = completion(model="gpt-4o", messages=messages)
@@ -39,7 +40,9 @@ tools:
               # find JSON start and end
               start = content.find('{')
               end = content.rfind('}')
-              return content[start:end+1]
+              json_content = content[start:end+1]
+              print("✅ Least privilaged policy JSON generated successfully")
+              return json_content
           except Exception as e:
               print(f"Policy generation failed: {e}")
               sys.exit(1)
@@ -77,6 +80,8 @@ tools:
           'request_id': request_id
       }
 
+      print("Creating approval request...")
+
       conn = sqlite3.connect('/sqlite_data/approval_requests.db')
       c = conn.cursor()
       c.execute('''CREATE TABLE IF NOT EXISTS approvals
@@ -101,6 +106,8 @@ tools:
           "request_id": request_id
       }
 
+      print("Request submitted successfully. 🕘 It is now pending approval.")
+
       # Create and send webhook
       prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privileged policy {USER_EMAIL} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request - here's the full request information:\n\n{entry} - FIRST THING you should do is ask if this is a valid request and if you should approve it. DO NOT RUN ANY COMMANDS UNTIL YOU HAVE VERIFIED THE REQUEST. Request ID: {request_id}"
       
@@ -119,6 +126,8 @@ tools:
           "updated_at": datetime.utcnow().isoformat() + "Z"
       }
 
+      print("Notifying approvers...")
+
       response = requests.post(
           "https://api.kubiya.ai/api/v1/event",
           headers={
@@ -129,7 +138,7 @@ tools:
       )
 
       if response.status_code < 300:
-          print(f"WAITING: Request submitted successfully and has been sent to an approver. Waiting for approval.")
+          print(f"🗳️ You will be notified as soon as your request will be approved or rejected.")
           event_response = response.json()
           webhook_url = event_response.get("webhook_url")
           if webhook_url:
