@@ -247,7 +247,13 @@ tools:
 
       if approval_action == "approved":
           duration_minutes = approval_request[2]
-          duration_seconds = duration_minutes * 60
+
+          # Set the future time to remove the policy based on ISO format and duration
+          duration_seconds = timeparse(f"{duration_minutes}m") 
+
+          schedule_time = str(datetime.timedelta(seconds=duration_seconds))
+          # Make sure its UTC
+          schedule_time = datetime.fromisoformat(schedule_time).isoformat()
 
           end_time = datetime.fromisoformat(approval_request[7])
           
