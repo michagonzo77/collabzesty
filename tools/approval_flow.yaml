@@ -28,26 +28,25 @@ tools:
       policy_description = "{{.policy_description}}"
 
       def generate_policy(policy_description: str) -> str:
-          print("✨ Generating policy...")
+          print("✨ Generating least privilaged policy JSON...")
           messages = [{"content": policy_description, "role": "user"}]
           try:
               response = completion(model="gpt-4o", messages=messages)
               if not response['choices']:
-                  print("Error: No response from OpenAI API. Could not generate policy.")
+                  print("❌ Error: No response from OpenAI API. Could not generate policy.")
                   sys.exit(1)
               content = response['choices'][0]['message']['content']
               # make sure we only return the policy
               # find JSON start and end
               start = content.find('{')
               end = content.rfind('}')
-              json_content = content[start:end+1]
-              print("✅ Least privilaged policy JSON generated successfully")
-              return json_content
+              return content[start:end+1]
           except Exception as e:
-              print(f"Policy generation failed: {e}")
+              print(f"❌ Policy generation failed: {e}")
               sys.exit(1)
 
       policy_json = generate_policy(policy_description)
+      print(f"✅ Generated least privilaged policy JSON:\n\n{policy_json}")
 
       try:
           if ttl[-1] == 'm':
@@ -57,13 +56,15 @@ tools:
           elif ttl[-1] == 'd':
               ttl_minutes = int(ttl[:-1]) * 60 * 24
           else:
-              print("Error: Unsupported TTL format. Use 'm', 'h', or 'd'.")
-              sys.exit(1)
+              print("❌ Error: Unsupported TTL format. Use 'm', 'h', or 'd'. Defaulting to 30 days.")
+              ttl_minutes = 30 * 24 * 60
       except ValueError:
-          print("Error: Invalid TTL format.")
-          sys.exit(1)
+          print("❌ Error: Invalid TTL format. Defaulting to 30 days.")
+          ttl_minutes = 30 * 24 * 60
 
       request_id = str(uuid.uuid4())
+
+      print("📝 Creating approval request...")
 
       approval_request = {
           'user_email': USER_EMAIL,
@@ -80,10 +81,13 @@ tools:
           'request_id': request_id
       }
 
-      print("Creating approval request...")
-
       conn = sqlite3.connect('/sqlite_data/approval_requests.db')
       c = conn.cursor()
+      try:
+          c.execute('''ALTER TABLE approvals ADD COLUMN request_id text''')
+      except sqlite3.OperationalError:
+          pass
+
       c.execute('''CREATE TABLE IF NOT EXISTS approvals
                    (user_email text, purpose text, ttl_minutes int, policy_name text, permission_set_name text, policy_json text, requested_at text, expires_at text, slack_channel_id text, slack_thread_ts text, approved text, request_id text)''')
 
@@ -92,8 +96,15 @@ tools:
                  approval_request['ttl_minutes'], approval_request['policy_name'], approval_request['permission_set_name'], 
                  approval_request['policy_json'], approval_request['requested_at'], approval_request['expires_at'], 
                  approval_request['slack_channel_id'], approval_request['slack_thread_ts'], 'pending', approval_request['request_id']))
-
       conn.commit()
+      print("✅ Approval request created successfully.")
+
+      # Cleanup old requests
+      expiry_threshold = datetime.utcnow() - timedelta(days=30)
+      c.execute("DELETE FROM approvals WHERE expires_at < ?", (expiry_threshold.isoformat(),))
+      conn.commit()
+      print("🧹 Cleaned up old, expired approval requests.")
+
       conn.close()
 
       entry = {
@@ -105,8 +116,6 @@ tools:
           "policy_json": policy_json,
           "request_id": request_id
       }
-
-      print("Request submitted successfully. 🕘 It is now pending approval.")
 
       # Create and send webhook
       prompt = f"User {USER_EMAIL} just asked for approval to get a temporary access to {permission_set_name} for {ttl} minutes. The purpose is: {purpose}.\n\nBelow is least privileged policy {USER_EMAIL} has asked for:\n\n{policy_json}\n\nAsk if to approve or reject this request - here's the full request information:\n\n{entry} - FIRST THING you should do is ask if this is a valid request and if you should approve it. DO NOT RUN ANY COMMANDS UNTIL YOU HAVE VERIFIED THE REQUEST. Request ID: {request_id}"
@@ -126,8 +135,6 @@ tools:
           "updated_at": datetime.utcnow().isoformat() + "Z"
       }
 
-      print("Notifying approvers...")
-
       response = requests.post(
           "https://api.kubiya.ai/api/v1/event",
           headers={
@@ -138,7 +145,7 @@ tools:
       )
 
       if response.status_code < 300:
-          print(f"🗳️ You will be notified as soon as your request will be approved or rejected.")
+          print(f"✅ WAITING: Request submitted successfully and has been sent to an approver. Waiting for approval.")
           event_response = response.json()
           webhook_url = event_response.get("webhook_url")
           if webhook_url:
@@ -148,9 +155,9 @@ tools:
                   json=payload
               )
           else:
-              print("Error: No webhook URL returned in the response.")
+              print("❌ Error: No webhook URL returned in the response. Could not send webhook to approving channel.")
       else:
-          print(f"Error: {response.status_code} - {response.text}")
+          print(f"❌ Error: {response.status_code} - {response.text}")
 
     args:
       purpose:
@@ -203,15 +210,15 @@ tools:
       KUBIYA_API_KEY = os.getenv('KUBIYA_API_KEY')
 
       if not APPROVER_USER_EMAIL:
-          print("Missing APPROVER_USER_EMAIL environment variable")
+          print("❌ Missing APPROVER_USER_EMAIL environment variable")
           sys.exit(1)
 
       if "{{.approval_action}}" not in ['approved', 'rejected']:
-          print("Error: Invalid approval action. Use 'approved' or 'rejected'.")
+          print("❌ Error: Invalid approval action. Use 'approved' or 'rejected'.")
           sys.exit(1)
 
       if APPROVER_USER_EMAIL not in APPROVING_USERS:
-          print(f"User {APPROVER_USER_EMAIL} is not authorized to approve this request")
+          print(f"❌ User {APPROVER_USER_EMAIL} is not authorized to approve this request")
           sys.exit(1)
 
       request_id = "{{.request_id}}"
@@ -228,14 +235,14 @@ tools:
       approval_request = c.fetchone()
 
       if not approval_request:
-          print(f"No pending approval request found for request ID {request_id}")
+          print(f"❌ No pending approval request found for request ID {request_id}")
           sys.exit(1)
 
       c.execute("UPDATE approvals SET approved=? WHERE request_id=?", (approval_action, request_id))
       conn.commit()
       conn.close()
 
-      print(f"Approval request with ID {request_id} has been {approval_action}")
+      print(f"✅ Approval request with ID {request_id} has been {approval_action}")
 
       if approval_action == "approved":
           # Schedule task for deletion
@@ -258,9 +265,9 @@ tools:
           )
 
           if response.status_code < 300:
-              print(f"Task scheduled successfully. Response: {response.text}")
+              print(f"✅ Task to delete permission set scheduled successfully. Will be deleted in {duration}")
           else:
-              print(f"Error: {response.status_code} - {response.text}")
+              print(f"❌ Error: {response.status_code} - {response.text}")
 
       slack_channel_id = approval_request[8]
       slack_thread_ts = approval_request[9]
@@ -320,9 +327,9 @@ tools:
       )
 
       if slack_response.status_code < 300:
-          print(f"All done! Slack notification sent successfully. Response: {slack_response.text}")
+          print(f"✅ All done! Slack notification sent successfully. Response: {slack_response.text}")
       else:
-          print(f"Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
+          print(f"❌ Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
 
     args:
       request_id:
