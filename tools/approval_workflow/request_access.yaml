@@ -79,7 +79,7 @@ tools:
           'request_id': request_id
       }
 
-      print(f"📝 Creating approval request...")
+      print(f"📝 Creating approval request")
 
       conn = sqlite3.connect('/sqlite_data/approval_requests.db')
       c = conn.cursor()
@@ -99,12 +99,19 @@ tools:
       conn.close()
 
       # Create and send webhook
-      prompt = (f"You are an access management assistant. You are currently conversing with an approving group. "
-                f"Your task is to help the approving group decide whether to approve the following access request. "
-                f"You have a new access request from {USER_EMAIL} for the following purpose: {purpose}. The request will expire in {ttl}. "
-                f"The ID of the request is {request_id}. The policy to be created is: ```{policy_json}```\n\n"
-                f"CAREFULLY ASK IF YOU CAN MOVE FORWARD WITH THIS REQUEST. DO NOT EXECUTE THE REQUEST UNTIL YOU HAVE RECEIVED APPROVAL FROM THE USER YOU ARE ASSISTING.")
-      
+      prompt = """You are an access management assistant. You are currently conversing with an approving group.
+                  Your task is to help the approving group decide whether to approve the following access request.
+                  You have a new access request from {USER_EMAIL} for the following purpose: {purpose}. The user requested this access for {ttl} minutes.
+                  This means that the access will be revoked after {ttl} minutes in case the request is approved.
+                  The ID of the request is {request_id}. The policy to be created is: ```{policy_json}```\n\n
+                  CAREFULLY ASK IF YOU CAN MOVE FORWARD WITH THIS REQUEST. DO NOT EXECUTE THE REQUEST UNTIL YOU HAVE RECEIVED APPROVAL FROM THE USER YOU ARE ASSISTING.""".format(
+          USER_EMAIL=USER_EMAIL,
+          purpose=purpose,
+          ttl=ttl,
+          request_id=request_id,
+          policy_json=policy_json
+      )
+
       payload = {
           "agent_id": os.getenv('KUBIYA_AGENT_UUID'),
           "communication": {
@@ -131,6 +138,20 @@ tools:
 
       if response.status_code < 300:
           print(f"✅ WAITING: Request submitted successfully and has been sent to an approver. Waiting for approval.")
+          event_response = response.json()
+          webhook_url = event_response.get("webhook_url")
+          if webhook_url:
+              webhook_response = requests.post(
+                  webhook_url,
+                  headers={'Content-Type': 'application/json'},
+                  json=payload
+              )
+              if webhook_response.status_code < 300:
+                  print("✅ Webhook event sent successfully.")
+              else:
+                  print(f"❌ Error sending webhook event: {webhook_response.status_code} - {webhook_response.text}")
+          else:
+              print("❌ Error: No webhook URL returned in the response. Could not send webhook to approving channel.")
       else:
           print(f"❌ Error: {response.status_code} - {response.text}")
 
