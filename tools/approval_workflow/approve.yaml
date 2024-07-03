@@ -64,7 +64,7 @@ tools:
           # Convert duration_seconds to a timedelta
           duration_timedelta = timedelta(seconds=duration_seconds)
 
-          now = datetime.utcnow()
+          now = datetime.now(timezone.utc)  # Get the current time in UTC with timezone
           schedule_time = now + duration_timedelta
           try:
               schedule_time = schedule_time.isoformat()
@@ -138,7 +138,8 @@ tools:
                               "type": "plain_text",
                               "text": "↗️💬 View Thread"
                           },
-                          "url": permalink
+                          "url": permalink,
+                          "action_id": "noop_action"
                       }
                   ]
               }
@@ -169,13 +170,13 @@ tools:
             },
             json=slack_payload
         )
-        
+
         # Remove expired requests
         c.execute("DELETE FROM approvals WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
         conn.commit()
 
         if slack_response.status_code < 300:
-            print(f"✅ All done! Slack notification sent successfully. Response: {slack_response.text}")
+            print(f"✅ All done! Slack notification sent successfully")
         else:
             print(f"❌ Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
 
