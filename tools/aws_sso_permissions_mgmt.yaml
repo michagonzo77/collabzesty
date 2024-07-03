@@ -156,7 +156,7 @@ tools:
       - name: sqlite_data
         path: /sqlite_data
     with_files:
-      - source: /root/.aws/credentials
+      - source: ~/.aws/credentials
         destination: /root/.aws/credentials
 
   - name: delete_permission_set
@@ -256,5 +256,5 @@ tools:
     dependencies: |
         boto3
     with_files:
-      - source: /root/.aws/credentials
+      - source: ~/.aws/credentials
         destination: /root/.aws/credentials
