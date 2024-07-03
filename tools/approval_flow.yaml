@@ -178,16 +178,16 @@ tools:
       litellm
       requests
     env:
-      - KUBIYA_USER_EMAIL
-      - SLACK_CHANNEL_ID
-      - SLACK_THREAD_TS
-      - KUBIYA_AGENT_UUID
-      - KUBIYA_USER_ORG
-      - KUBIYA_API_KEY
-      - APPROVAL_SLACK_CHANNEL
-      - AWS_PROFILE
-      - OPENAI_API_KEY
-      - OPENAI_API_BASE
+      - KUBIYA_USER_EMAIL # The email of the user requesting access (injected automatically by Kubiya)
+      - SLACK_CHANNEL_ID # The Slack channel ID for the approval request (injected automatically by Kubiya)
+      - SLACK_THREAD_TS # The Slack thread timestamp for the approval request (injected automatically by Kubiya)
+      - KUBIYA_AGENT_UUID # The agent UUID (injected automatically by Kubiya)
+      - KUBIYA_USER_ORG # The organization name (injected automatically by Kubiya)
+      - KUBIYA_API_KEY # The API key for the Kubiya API
+      - APPROVAL_SLACK_CHANNEL # The Slack channel ID for approval notifications
+      - AWS_PROFILE # The AWS profile to use for the policy generation (injected automatically by Kubiya)
+      - OPENAI_API_KEY # The API key for the OpenAI API (injected automatically by Kubiya in agent context, requires api key to run locally)
+      - OPENAI_API_BASE # The base URL for the OpenAI API (injected automatically by Kubiya in agent context, locally defaults to https://api.openai.com)
     with_volumes:
       - name: sqlite_data
         path: /sqlite_data
@@ -205,6 +205,7 @@ tools:
       from pytimeparse.timeparse import timeparse
 
       APPROVER_USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
+      APPROVAL_SLACK_CHANNEL = os.getenv('APPROVAL_SLACK_CHANNEL')
       APPROVING_USERS = os.getenv('APPROVING_USERS', '').split(',')
       SLACK_API_TOKEN = os.getenv('SLACK_API_TOKEN')
       KUBIYA_API_KEY = os.getenv('KUBIYA_API_KEY')
@@ -360,7 +361,8 @@ tools:
         # TODO:: Add validation for this field (choices: approved, rejected)
     env:
       - KUBIYA_USER_EMAIL # The email of the user approving the request
-      - APPROVING_USERS
+      - APPROVING_USERS # A comma-separated list of users who are authorized to approve requests
+      - APPROVAL_SLACK_CHANNEL # The Slack channel ID for approval notifications
       - SLACK_API_TOKEN # The Slack API token for sending messages
       - KUBIYA_API_KEY # The API key for the Kubiya API
       - KUBIYA_USER_ORG # The organization name (injected automatically by Kubiya)
