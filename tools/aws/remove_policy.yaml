@@ -12,6 +12,7 @@ tools:
       import time
       
       permission_set_arn = """{{.permission_set_arn}}"""
+      policy_name = """{{.policy_name}}"""
       instance_arn = os.getenv('SSO_INSTANCE_ARN')
       # get the account id from STS
       sts_client = boto3.client('sts')
