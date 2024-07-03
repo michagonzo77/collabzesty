@@ -176,7 +176,7 @@ tools:
         c.execute("DELETE FROM approvals WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
         conn.commit()
         conn.close()
-        
+
         if slack_response.status_code < 300:
             print(f"✅ All done! Slack notification sent successfully")
         else:
