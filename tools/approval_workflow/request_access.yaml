@@ -7,6 +7,7 @@ tools:
       import os
       import sqlite3
       import sys
+      import time
       from datetime import datetime, timedelta
       import requests
       from litellm import completion
@@ -163,7 +164,7 @@ tools:
         description: The purpose of the request
         required: true
       ttl:
-        description: "Time to live for the request in minutes - always ask the user for how long they need the access for yet recommend a default least privilege TTL"
+        description: "Time to live for the request in minutes - always ask the user for how long they need the access for yet recommend a default least privilege TTL (FORMAT: '<number>m' - eg '30m' - ONLY 'm' is supported)"
         required: true
       permission_set_name:
         description: The name of the permission set to update
