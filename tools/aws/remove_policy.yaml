@@ -16,8 +16,6 @@ tools:
       # get the account id from STS
       sts_client = boto3.client('sts')
       target_id = sts_client.get_caller_identity()['Account']
-      # make sure thats only the ID
-      target_id = target_id.split(":")[4]
 
       if not instance_arn:
           print("Error: Environment variable SSO_INSTANCE_ARN not set.")
