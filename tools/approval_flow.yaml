@@ -29,9 +29,10 @@ tools:
 
       def generate_policy(policy_description: str) -> str:
           print("✨ Generating least privileged policy JSON...")
-          messages = [{"content": policy_description, "role": "user"}]
+          messages = [{"content": f"Generate a least privileged policy JSON for the following description: {policy_description} - return the JSON object.",
+           "role": "user"}]
           try:
-              response = completion(model="gpt-4o", messages=messages)
+              response = completion(model="gpt-4o", messages=messages, response_format='{"type":"json_object"}')
               if not response['choices']:
                   print("❌ Error: No response from OpenAI API. Could not generate policy.")
                   sys.exit(1)
@@ -336,12 +337,14 @@ tools:
       approval_action:
         description: Approval action (approved or rejected)
         required: true
-        # TODO:: Add validation for this field 
+        # TODO:: Add validation for this field (choices: approved, rejected)
     env:
-      - KUBIYA_USER_EMAIL
+      - KUBIYA_USER_EMAIL # The email of the user approving the request
       - APPROVING_USERS
-      - SLACK_API_TOKEN
-      - KUBIYA_API_KEY
+      - SLACK_API_TOKEN # The Slack API token for sending messages
+      - KUBIYA_API_KEY # The API key for the Kubiya API
+      - KUBIYA_USER_ORG # The organization name (injected automatically by Kubiya)
+      - KUBIYA_AGENT_PROFILE # The agent profile to use for the scheduled task (injected automatically by Kubiya)
     dependencies: |
       requests
     with_volumes:
