@@ -93,7 +93,7 @@ tools:
           )
 
           if response.status_code < 300:
-              print(f"✅ Scheduled task to remove policy {approval_request[3]} from permission set {approval_request[4]} in {duration_minutes} minutes (expires at {end_time})")
+              print(f"✅ Scheduled task to remove policy `{approval_request[3]}` from permission set `{approval_request[4]}` in `{duration_minutes} minutes` (expires at `{schedule_time}`)")
           else:
               print(f"❌ Error: {response.status_code} - {response.text}")
 
