@@ -203,6 +203,7 @@ tools:
       import sys
       from datetime import datetime, timedelta
       import requests
+      from pytimeparse.timeparse import timeparse
 
       APPROVER_USER_EMAIL = os.getenv('KUBIYA_USER_EMAIL')
       APPROVING_USERS = os.getenv('APPROVING_USERS', '').split(',')
@@ -245,10 +246,11 @@ tools:
       print(f"✅ Approval request with ID {request_id} has been {approval_action}")
 
       if approval_action == "approved":
-          # Schedule task for deletion
-          duration = f"{approval_request[2]}m"
+          duration_minutes = approval_request[2]
+          duration_seconds = duration_minutes * 60
+          
           task_payload = {
-              "execution_delay": duration,
+              "execution_delay": duration_seconds,
               "task_description": "delete_permission_set",
               "channel_id": approval_request[8],
               "user_email": approval_request[0],
@@ -265,7 +267,7 @@ tools:
           )
 
           if response.status_code < 300:
-              print(f"✅ Task to delete permission set scheduled successfully. Will be deleted in {duration}")
+              print(f"✅ Task to delete permission set scheduled successfully. Will be deleted in {duration_minutes} minutes.")
           else:
               print(f"❌ Error: {response.status_code} - {response.text}")
 
@@ -348,6 +350,7 @@ tools:
       - KUBIYA_AGENT_PROFILE # The agent profile to use for the scheduled task (injected automatically by Kubiya)
     dependencies: |
       requests
+      pytimeparse==1.1.8
     with_volumes:
       - name: sqlite_data
         path: /sqlite_data
