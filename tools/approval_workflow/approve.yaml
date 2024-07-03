@@ -57,9 +57,14 @@ tools:
 
           # Set the future time to remove the policy based on ISO format and duration
           duration_seconds = timeparse(f"{duration_minutes}m")
+          if duration_seconds is None:
+              raise ValueError("Invalid duration format")
+
+          # Convert duration_seconds to a timedelta
+          duration_timedelta = timedelta(seconds=duration_seconds)
+
           now = datetime.utcnow()
-          schedule_time = now + duration_seconds
-          # try to convert to ISO format
+          schedule_time = now + duration_timedelta
           try:
               schedule_time = schedule_time.isoformat()
           except Exception as e:
