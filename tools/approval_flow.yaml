@@ -249,16 +249,14 @@ tools:
           duration_minutes = approval_request[2]
 
           # Set the future time to remove the policy based on ISO format and duration
-          duration_seconds = timeparse(f"{duration_minutes}m") 
+          duration_seconds = timeparse(f"{duration_minutes}m")
 
-          schedule_time = str(datetime.timedelta(seconds=duration_seconds))
-          # Make sure its UTC
-          schedule_time = datetime.fromisoformat(schedule_time).isoformat()
+          schedule_time = now + duration_seconds
 
           end_time = datetime.fromisoformat(approval_request[7])
           
           task_payload = {
-              "execution_delay": duration_seconds,
+              "execution_delay": 
               # TODO:: Notify both ends on Slack (easy to do with a dedicated Slack tool)
               "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]} as the TTL has expired",
               "channel_id": APPROVAL_SLACK_CHANNEL,
