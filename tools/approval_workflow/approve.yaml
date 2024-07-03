@@ -114,8 +114,8 @@ tools:
       permalink = permalink_response.json().get("permalink")
 
       action_emoji = ":white_check_mark:" if approval_action == "approved" else ":x:"
-      action_text = "approved" if approval_action == "approved" else "rejected"
-      approver_text = f"<@{APPROVER_USER_EMAIL}> {action_text} this request {action_emoji}"
+      action_text = "APPROVED" if approval_action == "approved" else "REJECTED"
+      approver_text = f"<@{APPROVER_USER_EMAIL}> *{action_text}* your access request {action_emoji}"
 
       slack_payload_main_thread = {
           "channel": slack_channel_id,
