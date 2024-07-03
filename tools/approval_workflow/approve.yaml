@@ -1,7 +1,7 @@
 tools:
   - name: approve_request
     alias: approve_request
-    description: Allows admins to approve or reject access requests - upon approval, a task is scheduled to delete the permission set after the TTL
+    description: Allows an admin to approve or reject a request for access and schedule the removal of the policy after the TTL expires - can only be run by authorized users (NOT the user who just requested access)
     type: python
     content: |
       import os
