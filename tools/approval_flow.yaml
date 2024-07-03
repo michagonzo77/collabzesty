@@ -32,7 +32,8 @@ tools:
           messages = [{"content": f"Generate a least privileged policy JSON for the following description: {policy_description} - return the JSON object.",
            "role": "user"}]
           try:
-              response = completion(model="gpt-4o", messages=messages, response_format='{"type":"json_object"}')
+              # TODO:: add JSON mode (https://litellm.vercel.app/docs/completion/input)
+              response = completion(model="gpt-4o", messages=messages)
               if not response['choices']:
                   print("❌ Error: No response from OpenAI API. Could not generate policy.")
                   sys.exit(1)
