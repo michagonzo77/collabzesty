@@ -11,7 +11,7 @@ tools:
         import configparser
         import time
 
-        permission_set_name = "{{.permission_set_name}}"
+        permission_set_name = "veranatest"
         policy_name = "{{.policy_name}}"
         instance_arn = os.getenv('SSO_INSTANCE_ARN')
         # get the account id from STS

@@ -74,8 +74,8 @@ tools:
               # Fallback to 1 hour
               schedule_time = now + timedelta(hours=1)
               schedule_time = schedule_time.isoformat()
-          
-          task_payload = {
+
+          grant_access_payload = {
               "scheduled_time": schedule_time,
               # TODO:: Notify both ends on Slack (easy to do with a dedicated Slack tool)
               "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]} as the TTL has expired",
@@ -84,19 +84,42 @@ tools:
               "organization_name": os.getenv("KUBIYA_USER_ORG"),
               "agent": os.getenv("KUBIYA_AGENT_PROFILE")
           }
-          response = requests.post(
+          removal_response = requests.post(
               'https://api.kubiya.ai/api/v1/scheduled_tasks',
               headers={
                   'Authorization': f'UserKey {KUBIYA_API_KEY}',
                   'Content-Type': 'application/json'
               },
-              json=task_payload
+              json=grant_access_payload
           )
 
-          if response.status_code < 300:
+          if removal_response.status_code < 300:
               print(f"✅ Scheduled task to remove policy `{approval_request[3]}` from permission set `{approval_request[4]}` in `{duration_minutes} minutes` (expires at `{schedule_time}`)")
           else:
-              print(f"❌ Error: {response.status_code} - {response.text}")
+              print(f"❌ Error: {removal_response.status_code} - {removal_response.text}")
+          
+          removal_payload = {
+              "scheduled_time": schedule_time,
+              # TODO:: Notify both ends on Slack (easy to do with a dedicated Slack tool)
+              "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]} as the TTL has expired",
+              "channel_id": APPROVAL_SLACK_CHANNEL,
+              "user_email": approval_request[0],
+              "organization_name": os.getenv("KUBIYA_USER_ORG"),
+              "agent": os.getenv("KUBIYA_AGENT_PROFILE")
+          }
+          removal_response = requests.post(
+              'https://api.kubiya.ai/api/v1/scheduled_tasks',
+              headers={
+                  'Authorization': f'UserKey {KUBIYA_API_KEY}',
+                  'Content-Type': 'application/json'
+              },
+              json=removal_payload
+          )
+
+          if removal_response.status_code < 300:
+              print(f"✅ Scheduled task to remove policy `{approval_request[3]}` from permission set `{approval_request[4]}` in `{duration_minutes} minutes` (expires at `{schedule_time}`)")
+          else:
+              print(f"❌ Error: {removal_response.status_code} - {removal_response.text}")
 
       slack_channel_id = approval_request[8]
       slack_thread_ts = approval_request[9]
