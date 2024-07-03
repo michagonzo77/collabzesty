@@ -22,7 +22,7 @@ tools:
       OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 
       purpose = "{{.purpose}}"
-      ttl = "{{.ttl}}"
+      ttl = "{{.time_to_live}}"
       policy_name = "{{.policy_name}}"
       permission_set_name = "{{.permission_set_name}}"
       policy_description = "{{.policy_description}}"
@@ -162,8 +162,8 @@ tools:
       purpose:
         description: The purpose of the request
         required: true
-      ttl:
-        description: "For how long (in minutes) the permission should be granted - ALWAYS ask the user for how long yet suggest a reasonable default based on the request - FORMAT: '<number>m' - eg: '30m' for 30 minutes"
+      time_to_live:
+        description: "The time-to-live (TTL) for the request in minutes - the duration for which the request will be valid before expiring"
         required: true
       policy_name:
         description: The name of the customer managed policy to create
