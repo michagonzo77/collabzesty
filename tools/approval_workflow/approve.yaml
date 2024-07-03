@@ -39,6 +39,11 @@ tools:
       c.execute("DELETE FROM approvals WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
       conn.commit()
 
+      # Debugging: Check existing data
+      c.execute("SELECT * FROM approvals")
+      all_approvals = c.fetchall()
+      print(f"All approvals in database: {all_approvals}")
+      
       c.execute("SELECT * FROM approvals WHERE request_id=? AND approved='pending'", (request_id,))
       approval_request = c.fetchone()
 

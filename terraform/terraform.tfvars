@@ -27,4 +27,4 @@ environment_variables = {
 // Debug mode will enable additional logging, and will allow visibility on Slack (if configured) as part of the conversation
 // Very useful for debugging and troubleshooting
 // DO NOT USE IN PRODUCTION
-debug = false
+debug = true
