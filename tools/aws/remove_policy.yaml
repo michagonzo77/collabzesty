@@ -11,12 +11,7 @@ tools:
       import configparser
       import time
       
-
-      args = """{{.aws_creds_content}}"""
       permission_set_arn = """{{.permission_set_arn}}"""
-      # generate the policy name
-
-      aws_creds_content = args.strip()
       instance_arn = os.getenv('SSO_INSTANCE_ARN')
       # get the account id from STS
       sts_client = boto3.client('sts')
@@ -27,9 +22,6 @@ tools:
       if not instance_arn:
           print("Error: Environment variable SSO_INSTANCE_ARN not set.")
           sys.exit(1)
-
-      config = configparser.ConfigParser()
-      config.read_string(aws_creds_content)
 
       # Initialize boto3 clients
       iam_client = session.client('iam')
