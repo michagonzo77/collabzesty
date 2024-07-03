@@ -28,7 +28,7 @@ tools:
       policy_description = "{{.policy_description}}"
 
       def generate_policy(policy_description: str) -> str:
-          print("✨ Generating least privilaged policy JSON...")
+          print("✨ Generating least privileged policy JSON...")
           messages = [{"content": policy_description, "role": "user"}]
           try:
               response = completion(model="gpt-4o", messages=messages)
@@ -36,8 +36,6 @@ tools:
                   print("❌ Error: No response from OpenAI API. Could not generate policy.")
                   sys.exit(1)
               content = response['choices'][0]['message']['content']
-              # make sure we only return the policy
-              # find JSON start and end
               start = content.find('{')
               end = content.rfind('}')
               return content[start:end+1]
@@ -46,7 +44,7 @@ tools:
               sys.exit(1)
 
       policy_json = generate_policy(policy_description)
-      print(f"✅ Generated least privilaged policy JSON:\n\n{policy_json}")
+      print(f"✅ Generated least privileged policy JSON:\n\n{policy_json}")
 
       try:
           if ttl[-1] == 'm':
@@ -73,8 +71,8 @@ tools:
           'policy_name': policy_name,
           'permission_set_name': permission_set_name,
           'policy_json': policy_json,
-          'requested_at': datetime.utcnow(),
-          'expires_at': datetime.utcnow() + timedelta(minutes=ttl_minutes),
+          'requested_at': datetime.utcnow().isoformat(),
+          'expires_at': (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat(),
           'slack_channel_id': SLACK_CHANNEL_ID,
           'slack_thread_ts': SLACK_THREAD_TS,
           'approved': 'pending',
