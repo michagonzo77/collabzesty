@@ -334,19 +334,20 @@ tools:
           ]
       }
 
-      slack_response = requests.post(
-          "https://slack.com/api/chat.postMessage",
-          headers={
-              'Content-Type': 'application/json',
-              'Authorization': f'Bearer {SLACK_API_TOKEN}'
-          },
-          json=slack_payload
-      )
+      for slack_payload in [slack_payload_main_thread, slack_payload_in_thread]:
+        slack_response = requests.post(
+            "https://slack.com/api/chat.postMessage",
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {SLACK_API_TOKEN}'
+            },
+            json=slack_payload
+        )
 
-      if slack_response.status_code < 300:
-          print(f"✅ All done! Slack notification sent successfully. Response: {slack_response.text}")
-      else:
-          print(f"❌ Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
+        if slack_response.status_code < 300:
+            print(f"✅ All done! Slack notification sent successfully. Response: {slack_response.text}")
+        else:
+            print(f"❌ Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
 
     args:
       request_id:
