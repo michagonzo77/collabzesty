@@ -72,10 +72,10 @@ tools:
               print(f"As a fallback, the policy will be removed in 1 hour.")
               # Fallback to 1 hour
               schedule_time = now + timedelta(hours=1)
-              sys.exit(1)
+              schedule_time = schedule_time.isoformat()
           
           task_payload = {
-              "schedule_time": schedule_time,
+              "scheduled_time": schedule_time,
               # TODO:: Notify both ends on Slack (easy to do with a dedicated Slack tool)
               "task_description": f"Immediately remove policy {approval_request[3]} from permission set {approval_request[4]} as the TTL has expired",
               "channel_id": APPROVAL_SLACK_CHANNEL,
@@ -125,7 +125,7 @@ tools:
                   "type": "section",
                   "text": {
                       "type": "mrkdwn",
-                      "text": f"*Request {approval_action}* {action_emoji}\n*Reason:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Status:* {approver_text}\n<{permalink}|View original conversation>"
+                      "text": f"*Request {approval_action}* {action_emoji}\n*Reason:* {approval_request[1]}\n*Access:* {approval_request[3]} for {approval_request[2]}\n*Status:* {approver_text}\n<{permalink}|View original conversation>\n\nYou can now try your brand new permissions! :rocket:\n\nNote: This permission will be removed automatically after {approval_request[2]} minutes\n\nPermission policy statement JSON:\n```{approval_request[5]}```\n\n*Next steps:* If you have any questions or need further assistance, please reach out to <@{approval_request[0]}>, you can now access the resources you requested with the permissions granted."
                   }
               },
               {
@@ -153,7 +153,7 @@ tools:
                   "type": "section",
                   "text": {
                       "type": "mrkdwn",
-                      "text": f"*Good news!* {approver_text} :tada:\n\nYou can now proceed with your request. Go ahead and try your brand new permissions! :rocket:\n\nNote: This permission will be removed automatically after {approval_request[2]} minutes."
+                      "text": f"*Good news!* {approver_text} :tada:\n\nGo ahead and try your brand new permissions! :rocket:\n\nNote: This permission will be removed automatically after {approval_request[2]} minutes\n\nPermission policy statement JSON:\n```{approval_request[5]}```"
                   }
               }
           ]

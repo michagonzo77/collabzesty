@@ -20,6 +20,8 @@ tools:
       if not instance_arn:
           print("Error: Environment variable SSO_INSTANCE_ARN not set.")
           sys.exit(1)
+          
+      session = boto3.Session()
 
       # Initialize boto3 clients
       iam_client = session.client('iam')
