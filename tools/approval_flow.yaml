@@ -30,7 +30,12 @@ tools:
           messages = [{"content": policy_description, "role": "user"}]
           try:
               response = completion(model="gpt-4o", messages=messages)
-              return response['choices'][0]['message']['content']
+              completion = response['choices'][0]['message']['content']
+              # make sure we only return the policy
+              # find JSON start and end
+              start = completion.find('{')
+              end = completion.rfind('}')
+              return completion[start:end+1]
           except Exception as e:
               print(f"Policy generation failed: {e}")
               sys.exit(1)
@@ -116,7 +121,7 @@ tools:
       )
 
       if response.status_code < 300:
-          print(f"Event created successfully. Response: {response.text}")
+          print(f"WAITING: Request submitted succesfully and has been sent to an approver. Waiting for approval.")
           event_response = response.json()
           webhook_url = event_response.get("webhook_url")
           if (webhook_url):
@@ -166,7 +171,7 @@ tools:
 
   - name: approve_request
     alias: approve_request
-    description: Allows to approve or reject a pending access request - updates the requester and sends a Slack notification
+    description: Allows admins to approve or reject access requests - upon approval, a task is scheduled to delete the permission set after the TTL
     type: python
     content: |
       import os
@@ -182,6 +187,10 @@ tools:
 
       if not APPROVER_USER_EMAIL:
           print("Missing APPROVER_USER_EMAIL environment variable")
+          sys.exit(1)
+
+      if "{{.approval_action}}" not in ['approved', 'rejected']:
+          print("Error: Invalid approval action. Use 'approved' or 'rejected'.")
           sys.exit(1)
 
       if APPROVER_USER_EMAIL not in APPROVING_USERS:
@@ -295,7 +304,7 @@ tools:
       )
 
       if slack_response.status_code < 300:
-          print(f"Slack notification sent successfully. Response: {slack_response.text}")
+          print(f"All done! Slack notification sent successfully. Response: {slack_response.text}")
       else:
           print(f"Error sending Slack notification: {slack_response.status_code} - {slack_response.text}")
 
@@ -309,9 +318,7 @@ tools:
       approval_action:
         description: Approval action (approved or rejected)
         required: true
-        options:
-          - approved
-          - rejected
+        # TODO:: Add validation for this field 
     env:
       - KUBIYA_USER_EMAIL
       - APPROVING_USERS
