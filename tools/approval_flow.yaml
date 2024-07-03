@@ -32,7 +32,6 @@ tools:
           messages = [{"content": f"Generate a least privileged policy JSON for the following description: {policy_description} - return the JSON object.",
            "role": "user"}]
           try:
-              # TODO:: add JSON mode (https://litellm.vercel.app/docs/completion/input)
               response = completion(model="gpt-4o", messages=messages)
               if not response['choices']:
                   print("❌ Error: No response from OpenAI API. Could not generate policy.")
@@ -270,7 +269,7 @@ tools:
           )
 
           if response.status_code < 300:
-              print(f"✅ Scheduled task to remove policy {approval_request[3]} from permission set {approval_request[4]} in {duration_minutes} minutes (expires at *{end_time}*)"
+              print(f"✅ Scheduled task to remove policy {approval_request[3]} from permission set {approval_request[4]} in {duration_minutes} minutes (expires at {end_time})")
           else:
               print(f"❌ Error: {response.status_code} - {response.text}")
 

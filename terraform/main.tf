@@ -13,44 +13,31 @@ provider "kubiya" {
 }
 
 resource "kubiya_agent" "agent" {
-  // Mandatory Fields
-  name         = "Grant Temporary Elevated Permissions" // String
-  runner       = "aks-dev"                              // String
-  description  = <<EOT
-Grant Temporary Elevated Permissions is an agent that manages the provision of temporary elevated permissions, including creating and assigning policies with time-bound access to AWS resources.
-EOT
-  instructions = <<EOT
-You are an intelligent agent designed to help managing the lifecycle of temporary elevated permissions to execute specific AWS operations. You also provide an easy to way to request access in case of failure as well as approve access requests.
-In case the user does not have permissions to run the command (command returned such error) - you should suggest them to ask for approval.
-** You have access only to the commands you see on this prompt **
-EOT
-  // Optional fields, String
-  model = "azure/gpt-4o" // If not provided, Defaults to "azure/gpt-4"
-  // If not provided, Defaults to "ghcr.io/kubiyabot/kubiya-agent:stable"
-  image = "kubiya/base-agent:tools-v4"
+  name         = var.agent_name
+  runner       = var.kubiya_runner
+  description  = var.agent_description
+  instructions = var.agent_instructions
+  model        = var.llm_model
+  image        = var.agent_image
 
-  // Optional Fields:
-  // Arrays
-  secrets      = []
-  integrations = ["kubiyamichaelg", "slack"]
-  users        = []
-  groups       = ["Admin", "Users"]
-  links        = []
-  environment_variables = {
-    DEBUG                   = "1"
-    KUBIYA_DEBUG            = "1"
-    LOG_LEVEL               = "INFO"
-    KUBIYA_TOOL_CONFIG_URLS = "https://github.com/michagonzo77/collabzesty"
-    TOOLS_MANAGER_URL       = "http://localhost:3001"
-    TOOLS_SERVER_URL        = "http://localhost:3001"
-    TOOL_MANAGER_LOG_FILE   = "/tmp/tool-manager.log"
-    TOOL_SERVER_URL         = "http://localhost:3001"
-    SSO_INSTANCE_ARN        = "arn:aws:sso:::instance/ssoins-7223725edfa9d76b"
-    SCHEDULE_TASK           = "1"
-    APPROVING_USERS         = "michael.gonzalez@kubiya.ai,shaked@kubiya.ai"
-    APPROVAL_SLACK_CHANNEL  = "#devops-oncall"
+  secrets      = var.secrets
+  integrations = var.integrations
+  users        = var.users
+  groups       = var.groups
+  links        = var.links
+  tool_sources = var.agent_tool_sources
 
-  }
+  environment_variables = merge(
+    {
+      LOG_LEVEL = var.log_level
+    },
+    var.debug ? { DEBUG = "1", KUBIYA_DEBUG = "1" } : {},
+    var.environment_variables,
+    {
+      APPROVING_USERS        = join(",", var.approving_users)
+      APPROVAL_SLACK_CHANNEL = var.approval_slack_channel
+    }
+  )
 }
 
 output "agent" {
